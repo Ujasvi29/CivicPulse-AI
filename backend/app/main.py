@@ -1,7 +1,9 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+from app.services.supabase import check_db_connection
 
 load_dotenv()
 
@@ -33,6 +35,29 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "CivicPulse AI API"
+    }
+
+@app.get("/health/db")
+async def db_health_check(response: Response):
+    db_result = check_db_connection()
+    if not db_result.get("success"):
+        if db_result.get("status") == "needs_migration":
+            # 200 OK with migration notice
+            return {
+                "status": "needs_migration",
+                "database": "connected",
+                "message": db_result.get("message")
+            }
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": db_result.get("error", "Database connection error")
+        }
+    
+    return {
+        "status": "healthy",
+        "database": "connected"
     }
 
 if __name__ == "__main__":
