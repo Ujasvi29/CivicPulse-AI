@@ -1,12 +1,17 @@
 import { supabase } from './supabase';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 /**
- * Generate a unique case tracking code in format CIV-2026-XXXX
+ * Convert a File object to base64 data string
  */
-export const generateCaseNumber = () => {
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const year = new Date().getFullYear();
-  return `CIV-${year}-${randomSuffix}`;
+export const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
 };
 
 /**
@@ -22,7 +27,7 @@ export const getDepartments = async () => {
     if (error) throw error;
     return { success: true, data: data || [] };
   } catch (error) {
-    console.warn('Could not fetch departments from DB, using fallback list:', error.message);
+    console.warn('Using fallback departments list:', error.message);
     return {
       success: true,
       data: [
@@ -39,93 +44,77 @@ export const getDepartments = async () => {
 };
 
 /**
- * Create a new civic report in Supabase
+ * Phase 7: Submit and execute multimodal Gemini AI analysis
+ * Sends report details + photographic evidence to backend
  */
-export const createReport = async ({
+export const submitAndAnalyzeCivicReport = async ({
   title,
   description,
   category,
-  subcategory = null,
   latitude = null,
   longitude = null,
   address = '',
   imageFile = null,
-  userId,
+  userId = null,
 }) => {
   try {
-    const caseNumber = generateCaseNumber();
-    let imageUrl = null;
+    let imageBase64 = null;
+    let imageMimeType = 'image/jpeg';
 
-    // Handle Image upload if provided
     if (imageFile) {
-      try {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `reports/${fileName}`;
-
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('civic-images')
-          .upload(filePath, imageFile);
-
-        if (!uploadErr && uploadData) {
-          const { data: urlData } = supabase.storage.from('civic-images').getPublicUrl(filePath);
-          imageUrl = urlData?.publicUrl || null;
-        } else {
-          // If storage bucket is not configured, store preview as base64 string for demo
-          imageUrl = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(imageFile);
-          });
-        }
-      } catch (imgErr) {
-        console.warn('Image storage fallback:', imgErr);
-      }
+      imageBase64 = await fileToBase64(imageFile);
+      imageMimeType = imageFile.type || 'image/jpeg';
     }
 
-    // Default severity/priority assignment (will be refined by AI in Phase 7)
-    const reportPayload = {
-      case_number: caseNumber,
-      user_id: userId,
+    // Get active Supabase session token if available
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const activeUserId = userId || sessionData?.session?.user?.id;
+
+    const payload = {
       title: title.trim(),
       description: description.trim(),
-      category: category || 'General Civic Services',
-      subcategory: subcategory,
-      status: 'submitted',
-      priority: 'moderate',
-      severity: 50,
-      urgency: 50,
-      public_impact: 50,
-      impact_score: 50,
-      duration_days: 1,
+      category: category || 'Let AI determine category',
       latitude: latitude ? parseFloat(latitude) : null,
       longitude: longitude ? parseFloat(longitude) : null,
-      address: address.trim() || 'Location shared via report',
-      image_url: imageUrl,
+      address: address.trim() || 'Location specified by citizen',
+      image_base64: imageBase64,
+      image_mime_type: imageMimeType,
+      user_id: activeUserId,
     };
 
-    const { data: newReport, error: insertErr } = await supabase
-      .from('reports')
-      .insert(reportPayload)
-      .select()
-      .single();
-
-    if (insertErr) throw insertErr;
-
-    // Insert Initial Timeline Update in report_updates
-    if (newReport?.id) {
-      await supabase.from('report_updates').insert({
-        report_id: newReport.id,
-        status: 'submitted',
-        message: 'Civic report received and registered in the municipal system.',
-        actor_id: userId,
-      });
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
-    return { success: true, data: newReport };
+    const response = await fetch(`${API_BASE_URL}/api/reports`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Server returned error ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      caseNumber: data.case_number,
+      report: data.report,
+      aiAnalysis: data.ai_analysis,
+      metrics: data.metrics,
+    };
   } catch (error) {
-    console.error('Error creating report:', error);
-    return { success: false, error: error.message || 'Failed to submit report. Please try again.' };
+    console.error('Error submitting civic report:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to submit report. Please check backend connection.',
+    };
   }
 };
 
@@ -136,7 +125,7 @@ export const getUserReports = async (userId) => {
   try {
     const { data, error } = await supabase
       .from('reports')
-      .select('*')
+      .select('*, departments(name)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -156,7 +145,7 @@ export const getReportById = async (reportId) => {
     // 1. Fetch report details
     const { data: report, error: reportErr } = await supabase
       .from('reports')
-      .select('*, departments(id, name)')
+      .select('*, departments(id, name, description)')
       .eq('id', reportId)
       .single();
 
@@ -197,7 +186,7 @@ export const getPublicReports = async () => {
   try {
     const { data, error } = await supabase
       .from('reports')
-      .select('id, case_number, title, description, category, status, priority, impact_score, address, latitude, longitude, created_at')
+      .select('id, case_number, title, description, category, subcategory, status, priority, impact_score, address, latitude, longitude, created_at, image_url')
       .order('created_at', { ascending: false })
       .limit(50);
 

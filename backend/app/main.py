@@ -3,7 +3,8 @@ from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from app.services.supabase import check_db_connection
+from app.services.supabase import check_db_connection, get_supabase_client
+from app.routers.reports import router as reports_router
 
 load_dotenv()
 
@@ -29,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Routers
+app.include_router(reports_router)
 
 @app.get("/health")
 async def health_check():
@@ -59,6 +63,19 @@ async def db_health_check(response: Response):
         "status": "healthy",
         "database": "connected"
     }
+
+@app.get("/api/departments")
+async def get_departments():
+    """
+    Returns list of all civic departments.
+    """
+    try:
+        client = get_supabase_client()
+        res = client.table("departments").select("*").order("name").execute()
+        return {"success": True, "departments": res.data or []}
+    except Exception as e:
+        return {"success": False, "departments": [], "error": str(e)}
+
 
 if __name__ == "__main__":
     import uvicorn
