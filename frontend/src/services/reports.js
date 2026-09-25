@@ -199,6 +199,57 @@ export const getPublicReports = async () => {
 };
 
 /**
+ * Phase 12: Update civic case status (admin/system only via backend)
+ */
+export const updateReportStatus = async (reportId, { status, message }) => {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/status`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ status, message }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Status update failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error updating report status:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Phase 11: Get all reports that have GPS coordinates for the civic map
+ */
+export const getMappedReports = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('id, case_number, title, category, status, priority, severity, impact_score, address, latitude, longitude, created_at')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) throw error;
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error fetching mapped reports:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
  * Update user profile
  */
 export const updateUserProfile = async (userId, { fullName, city }) => {

@@ -235,17 +235,27 @@ async def create_and_analyze_report(
         logger.warning(f"Error inserting ai_analysis record: {e}")
         created_ai_analysis = ai_analysis_record
 
-    # 8. Insert Initial Timeline Update
-    update_record = {
-        "report_id": report_id,
-        "status": "Submitted",
-        "message": "Report submitted and AI diagnostic analysis completed.",
-        "actor_id": auth_user_id
-    }
+    # 8. Insert Submitted Timeline Entry
     try:
-        client.table("report_updates").insert(update_record).execute()
+        client.table("report_updates").insert({
+            "report_id": report_id,
+            "status": "Submitted",
+            "message": "Your civic report was submitted successfully. CivicPulse AI is analyzing the issue.",
+            "actor_id": auth_user_id,
+        }).execute()
     except Exception as e:
-        logger.warning(f"Error inserting initial report_update: {e}")
+        logger.warning(f"Error inserting submitted report_update: {e}")
+
+    # 9. Insert AI Analyzed Timeline Entry (since Gemini analysis succeeded to get here)
+    try:
+        client.table("report_updates").insert({
+            "report_id": report_id,
+            "status": "AI Analyzed",
+            "message": "CivicPulse AI completed multimodal diagnostic analysis, visual inspection, and civic impact scoring.",
+            "actor_id": None,
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Error inserting ai_analyzed report_update: {e}")
 
     return {
         "success": True,
@@ -327,3 +337,86 @@ async def get_report_details(report_id: str):
     except Exception as e:
         logger.error(f"Error fetching report details: {e}")
         raise HTTPException(status_code=500, detail="Database query error")
+
+
+# Valid status transitions for civic case lifecycle
+VALID_STATUSES = ["submitted", "ai_analyzed", "assigned", "in_progress", "resolved"]
+
+STATUS_DISPLAY = {
+    "submitted": "Submitted",
+    "ai_analyzed": "AI Analyzed",
+    "assigned": "Department Assigned",
+    "in_progress": "In Progress",
+    "resolved": "Resolved",
+}
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str = Field(..., description="New status for the civic case")
+    message: Optional[str] = Field(None, description="Optional update message for citizens")
+
+
+@router.patch("/{report_id}/status", status_code=status.HTTP_200_OK)
+async def update_report_status(
+    report_id: str,
+    payload: StatusUpdateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Phase 12: Update civic case status and append a lifecycle timeline entry.
+    Validates status values strictly. Inserts into report_updates table.
+    """
+    new_status = payload.status.lower().strip()
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid status '{payload.status}'. Must be one of: {', '.join(VALID_STATUSES)}"
+        )
+
+    auth_user_id = get_current_user_id(authorization)
+    client = get_supabase_client()
+
+    # Verify report exists
+    try:
+        report_res = client.table("reports").select("id, case_number, status").eq("id", report_id).execute()
+        if not report_res.data:
+            raise HTTPException(status_code=404, detail="Civic report not found")
+        report = report_res.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Status update: report lookup failed: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    # Update report status
+    try:
+        client.table("reports").update({"status": new_status}).eq("id", report_id).execute()
+    except Exception as e:
+        logger.error(f"Status update: report update failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update report status")
+
+    # Append timeline update record
+    display_status = STATUS_DISPLAY.get(new_status, new_status.replace("_", " ").title())
+    update_message = payload.message or f"Case status updated to: {display_status}."
+
+    try:
+        update_record = {
+            "report_id": report_id,
+            "status": display_status,
+            "message": update_message,
+            "actor_id": auth_user_id,
+        }
+        client.table("report_updates").insert(update_record).execute()
+    except Exception as e:
+        logger.warning(f"Status update: timeline insert failed: {e}")
+
+    return {
+        "success": True,
+        "report_id": report_id,
+        "case_number": report.get("case_number"),
+        "previous_status": report.get("status"),
+        "new_status": new_status,
+        "display_status": display_status,
+        "message": update_message,
+    }
+
