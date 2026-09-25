@@ -4,7 +4,7 @@ import base64
 import logging
 from pathlib import Path
 from typing import Optional, Literal, Dict, Any
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, field_validator
 import httpx
 from dotenv import load_dotenv
 
@@ -31,14 +31,15 @@ SEVERITY_LEVELS = ["Low", "Moderate", "High", "Critical"]
 URGENCY_LEVELS = ["Low", "Medium", "High", "Immediate"]
 PUBLIC_IMPACT_LEVELS = ["Low", "Moderate", "High", "Critical"]
 
-SEVERITY_MAP = {"Low": 25, "Moderate": 50, "High": 75, "Critical": 95}
-URGENCY_MAP = {"Low": 25, "Medium": 50, "High": 75, "Immediate": 95}
-PUBLIC_IMPACT_MAP = {"Low": 25, "Moderate": 50, "High": 75, "Critical": 95}
+# Explicit factor point mappings for deterministic Phase 10 Civic Impact Engine
+SEVERITY_MAP = {"Low": 25, "Moderate": 50, "High": 75, "Critical": 100}
+URGENCY_MAP = {"Low": 25, "Medium": 50, "High": 75, "Immediate": 100}
+PUBLIC_IMPACT_MAP = {"Low": 25, "Moderate": 50, "High": 75, "Critical": 100}
 
 
 class CivicAIAnalysis(BaseModel):
     """
-    Strict Pydantic model validating all 10 core Gemini Civic Intelligence output fields.
+    Strict Pydantic model validating all Phase 8 & Phase 9 Gemini Civic Intelligence output fields.
     """
     category: str = Field(..., description="Civic category matching official department domains")
     subcategory: str = Field(..., description="Specific sub-issue type e.g. Pothole, Streetlight, Garbage")
@@ -50,6 +51,9 @@ class CivicAIAnalysis(BaseModel):
     recommended_department: str = Field(..., description="Exact responsible municipal department")
     recommended_action: str = Field(..., description="Actionable recommended municipal next step")
     explanation: str = Field(..., description="Objective reasoning distinguishing observed evidence from inference")
+    visual_findings: Optional[str] = Field("No photographic evidence provided. Diagnostic based on citizen description.", description="Specific physical defects visible in uploaded photograph")
+    visual_severity: Optional[str] = Field("N/A", description="AI-estimated visual severity from photograph")
+    visual_confidence: Optional[float] = Field(None, description="Visual evidence confidence score (0.0 to 1.0)")
 
     @field_validator("category")
     @classmethod
@@ -108,45 +112,77 @@ class CivicAIAnalysis(BaseModel):
             return 0.7
 
 
-def calculate_metrics(severity_label: str, urgency_label: str, impact_label: str, evidence_confidence: float) -> Dict[str, Any]:
+def calculate_civic_impact_score(
+    severity_label: str,
+    urgency_label: str,
+    impact_label: str,
+    evidence_confidence: float,
+    duration_days: int = 1
+) -> Dict[str, Any]:
     """
-    Transparent deterministic priority & impact formula:
-    Impact Score (0-100) = (Severity * 0.35) + (Urgency * 0.35) + (Public Impact * 0.20) + (Evidence Confidence * 0.10)
-    Priority Rank:
-      - Critical: Score >= 80
-      - High: Score >= 60
-      - Moderate: Score >= 35
-      - Low: Score < 35
-    """
-    severity_val = SEVERITY_MAP.get(severity_label, 50)
-    urgency_val = URGENCY_MAP.get(urgency_label, 50)
-    public_impact_val = PUBLIC_IMPACT_MAP.get(impact_label, 50)
-    confidence_val = max(0, min(100, int(evidence_confidence * 100)))
+    Phase 10: Deterministic, Explainable Civic Impact Engine.
+    Formula:
+      - Severity Factor (30% weight): Low=25, Moderate=50, High=75, Critical=100
+      - Urgency Factor (30% weight): Low=25, Medium=50, High=75, Immediate=100
+      - Public Impact Factor (25% weight): Low=25, Moderate=50, High=75, Critical=100
+      - Duration Factor (5% weight): Base 10 for new reports, escalates up to 100 for older reports
+      - Evidence Confidence Factor (10% weight): 0 to 100 based on AI evidence confidence
 
-    impact_score = round(
-        (severity_val * 0.35) +
-        (urgency_val * 0.35) +
-        (public_impact_val * 0.20) +
-        (confidence_val * 0.10)
+    Impact Levels:
+      - CRITICAL: 75–100 -> priority: 'critical'
+      - HIGH: 50–74 -> priority: 'high'
+      - MODERATE: 25–49 -> priority: 'moderate'
+      - LOW: 0–24 -> priority: 'low'
+    """
+    sev_score = SEVERITY_MAP.get(severity_label, 50)
+    urg_score = URGENCY_MAP.get(urgency_label, 50)
+    pub_score = PUBLIC_IMPACT_MAP.get(impact_label, 50)
+    conf_score = max(0, min(100, int(evidence_confidence * 100)))
+
+    # Duration factor calculation (minimal/neutral for new reports)
+    dur_days = max(1, duration_days or 1)
+    dur_score = min(100, 10 + (dur_days - 1) * 10)
+    dur_label = "Newly reported (1 day)" if dur_days <= 1 else f"Unresolved ({dur_days} days)"
+
+    # Weighted calculation
+    raw_impact = (
+        (sev_score * 0.30) +
+        (urg_score * 0.30) +
+        (pub_score * 0.25) +
+        (dur_score * 0.05) +
+        (conf_score * 0.10)
     )
-    impact_score = max(5, min(100, impact_score))
+    final_impact_score = max(0, min(100, round(raw_impact)))
 
-    if impact_score >= 80:
+    # Determine Impact Level & Priority
+    if final_impact_score >= 75:
+        impact_level = "CRITICAL"
         priority = "critical"
-    elif impact_score >= 60:
+    elif final_impact_score >= 50:
+        impact_level = "HIGH"
         priority = "high"
-    elif impact_score >= 35:
+    elif final_impact_score >= 25:
+        impact_level = "MODERATE"
         priority = "moderate"
     else:
+        impact_level = "LOW"
         priority = "low"
 
     return {
-        "severity_score": severity_val,
-        "urgency_score": urgency_val,
-        "public_impact_score": public_impact_val,
-        "confidence_score": confidence_val,
-        "impact_score": impact_score,
-        "priority": priority
+        "impact_score": final_impact_score,
+        "impact_level": impact_level,
+        "priority": priority,
+        "severity_score": sev_score,
+        "severity_label": severity_label,
+        "urgency_score": urg_score,
+        "urgency_label": urgency_label,
+        "public_impact_score": pub_score,
+        "public_impact_label": impact_label,
+        "duration_score": dur_score,
+        "duration_label": dur_label,
+        "confidence_score": conf_score,
+        "confidence_label": f"{conf_score}% Confidence",
+        "formula_explanation": "CivicPulse AI combines issue severity (30%), urgency (30%), public impact (25%), duration (5%), and evidence confidence (10%) to deterministically estimate civic impact."
     }
 
 
@@ -157,12 +193,21 @@ RULES:
 1. Focus strictly on the reported civic issue and visible physical municipal infrastructure.
 2. Use the description as primary context.
 3. Use the image as supporting visual evidence when available (multimodal analysis).
-4. Do NOT invent facts that are not supported by the input.
-5. Do NOT identify private individuals in images or infer sensitive personal characteristics.
-6. Distinguish observed evidence from inference.
-7. If visual evidence is unclear or description is vague/ambiguous, reduce evidence_confidence (0.1 to 0.5) and state this in the explanation.
-8. If description is detailed and/or image clearly supports the issue, set higher evidence_confidence (0.7 to 0.95).
-9. Recommend the most appropriate municipal department from the allowed list:
+4. When an image is provided:
+   - Identify visible infrastructure defects (potholes, cracks, waste piles, broken lamps, pipe bursts, waterlogging, etc.)
+   - Set "visual_findings" to a clear description of what is physically visible in the photo.
+   - Set "visual_severity" to "Low" | "Moderate" | "High" | "Critical".
+   - Set "visual_confidence" to a float between 0.1 and 1.0.
+   - If the photo is blurry, unrelated, or inconclusive, set visual_findings to "Visual evidence is inconclusive.", reduce visual_confidence (0.1-0.4), and explain why.
+5. When NO image is provided:
+   - Set "visual_findings" to "No photographic evidence provided. Diagnostic based on citizen description."
+   - Set "visual_severity" to "N/A"
+   - Set "visual_confidence" to null.
+6. Do NOT invent facts that are not supported by the input.
+7. Do NOT identify private individuals in images or infer sensitive personal characteristics.
+8. Distinguish observed physical evidence from inference.
+9. If description is vague/ambiguous, reduce evidence_confidence (0.1 to 0.5) and state this in the explanation.
+10. Recommend the most appropriate municipal department from the allowed list:
    - "Roads & Infrastructure"
    - "Waste Management"
    - "Water & Drainage"
@@ -170,7 +215,6 @@ RULES:
    - "Public Safety"
    - "Sanitation"
    - "General Civic Services"
-10. If the citizen suggested a category that contradicts actual evidence, independently choose the correct objective category.
 11. Return ONLY a single, valid JSON object matching the schema. No markdown code blocks, no extra conversational text.
 
 OUTPUT SCHEMA:
@@ -184,7 +228,10 @@ OUTPUT SCHEMA:
   "evidence_confidence": <number between 0.1 and 1.0>,
   "recommended_department": "<Must match the exact category name>",
   "recommended_action": "<1 concise actionable recommendation for municipal authorities>",
-  "explanation": "<1-2 sentences explaining why this severity, urgency, and category were assessed, referencing specific evidence>"
+  "explanation": "<1-2 sentences explaining why this severity, urgency, and category were assessed, referencing specific evidence>",
+  "visual_findings": "<Specific physical defects visible in photograph, or 'No photographic evidence provided.' or 'Visual evidence is inconclusive.'>",
+  "visual_severity": "Low" | "Moderate" | "High" | "Critical" | "N/A",
+  "visual_confidence": <float 0.1 to 1.0 or null>
 }
 """
 
@@ -197,14 +244,15 @@ async def analyze_civic_report(
     longitude: Optional[float] = None,
     category_hint: Optional[str] = None,
     image_base64: Optional[str] = None,
-    image_mime_type: Optional[str] = "image/jpeg"
+    image_mime_type: Optional[str] = "image/jpeg",
+    duration_days: int = 1
 ) -> dict:
     """
-    Main Phase 8 Gemini Civic Intelligence Engine:
+    Main Civic Intelligence Engine (Phase 8, Phase 9, Phase 10):
     - Multimodal support: Text-only and Text+Image
     - Candidate model cascade with controlled retry
-    - Strict Pydantic validation of 10 diagnostic fields
-    - Deterministic impact scoring & priority ranking
+    - Strict Pydantic validation of diagnostic & visual fields
+    - Deterministic Civic Impact Engine calculation
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -218,9 +266,11 @@ async def analyze_civic_report(
         "gemini-3.8-flash"
     ]
 
+    has_image = bool(image_base64)
     user_text_parts = [
         f"Title: {title}",
-        f"Description: {description}"
+        f"Description: {description}",
+        f"Visual Evidence Attached: {'Yes (analyze uploaded image for physical damage/hazards)' if has_image else 'No (text description only)'}"
     ]
     if location_address:
         user_text_parts.append(f"Location / Address: {location_address}")
@@ -233,7 +283,7 @@ async def analyze_civic_report(
     parts = [{"text": prompt_text}]
 
     # Multimodal image attachment
-    if image_base64:
+    if has_image:
         clean_base64 = image_base64
         if "," in clean_base64:
             clean_base64 = clean_base64.split(",", 1)[1]
@@ -308,12 +358,13 @@ async def analyze_civic_report(
     # Validate with Pydantic
     analysis = CivicAIAnalysis(**response_json)
 
-    # Compute impact scores and priority rank
-    metrics = calculate_metrics(
-        analysis.severity,
-        analysis.urgency,
-        analysis.public_impact,
-        analysis.evidence_confidence
+    # Phase 10: Deterministic Civic Impact Calculation
+    impact_metrics = calculate_civic_impact_score(
+        severity_label=analysis.severity,
+        urgency_label=analysis.urgency,
+        impact_label=analysis.public_impact,
+        evidence_confidence=analysis.evidence_confidence,
+        duration_days=duration_days
     )
 
     # Check if citizen selected a category and if AI disagreed
@@ -324,7 +375,8 @@ async def analyze_civic_report(
 
     return {
         "analysis": analysis.model_dump(),
-        "metrics": metrics,
+        "metrics": impact_metrics,
+        "has_image": has_image,
         "raw_response": raw_response,
         "model_name": used_model,
         "citizen_category_disagreement": citizen_category_disagreement,

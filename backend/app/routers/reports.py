@@ -257,7 +257,12 @@ async def create_and_analyze_report(
             "severity_label": analysis_data.get("severity"),
             "urgency_label": analysis_data.get("urgency"),
             "public_impact_label": analysis_data.get("public_impact"),
-            "evidence_confidence_percent": f"{metrics_data['confidence_score']}%"
+            "evidence_confidence_percent": f"{metrics_data['confidence_score']}%",
+            "visual_findings": analysis_data.get("visual_findings"),
+            "visual_severity": analysis_data.get("visual_severity"),
+            "visual_confidence": analysis_data.get("visual_confidence"),
+            "citizen_category_disagreement": ai_result.get("citizen_category_disagreement", False),
+            "citizen_suggested_category": ai_result.get("citizen_suggested_category")
         },
         "metrics": metrics_data
     }

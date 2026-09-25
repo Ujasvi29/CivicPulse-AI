@@ -9,17 +9,17 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowRight,
-  ShieldCheck,
   Building2,
   Activity,
   Copy,
   ChevronRight,
   Loader2,
-  Clock,
-  Flame,
   Check
 } from 'lucide-react';
 import { Header } from '../components/Header';
+import { CategoryDropdown } from '../components/CategoryDropdown';
+import { CivicImpactCard } from '../components/CivicImpactCard';
+import { VisualEvidenceCard } from '../components/VisualEvidenceCard';
 import { useAuth } from '../context/AuthContext';
 import { getDepartments, submitAndAnalyzeCivicReport } from '../services/reports';
 
@@ -99,14 +99,12 @@ export const ReportIssue = () => {
   const handleImageChange = (file) => {
     if (!file) return;
 
-    // Validate type
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrorMessage('Please upload a valid image (JPEG, PNG, or WEBP).');
       return;
     }
 
-    // Validate size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setErrorMessage('Image file is too large. Please select a photo under 10MB.');
       return;
@@ -149,9 +147,7 @@ export const ReportIssue = () => {
     setSubmitStep(1);
 
     try {
-      // Step 2: Image processed
       setTimeout(() => setSubmitStep(2), 600);
-      // Step 3: AI Analyzing
       setTimeout(() => setSubmitStep(3), 1200);
 
       const result = await submitAndAnalyzeCivicReport({
@@ -172,7 +168,10 @@ export const ReportIssue = () => {
       setSubmitStep(4);
       setTimeout(() => {
         setIsSubmitting(false);
-        setSubmissionResult(result);
+        setSubmissionResult({
+          ...result,
+          imagePreview: imagePreview,
+        });
       }, 500);
     } catch (err) {
       setIsSubmitting(false);
@@ -221,7 +220,7 @@ export const ReportIssue = () => {
                     Civic Issue Analyzed
                   </h1>
                   <p className="text-sm text-[var(--muted)]">
-                    CivicPulse AI has categorized, assessed urgency, and assigned your report.
+                    CivicPulse AI has completed visual inspection, impact calculation, and department routing.
                   </p>
                 </div>
               </div>
@@ -247,7 +246,7 @@ export const ReportIssue = () => {
               </div>
             </div>
 
-            {/* AI Assessment Diagnostic Card */}
+            {/* 1. AI Diagnostic Assessment Card */}
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
                 <div className="flex items-center gap-2.5">
@@ -257,7 +256,7 @@ export const ReportIssue = () => {
                   </h2>
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                  Multimodal Evidence Analysis
+                  Multimodal Issue Classification
                 </span>
               </div>
 
@@ -362,35 +361,45 @@ export const ReportIssue = () => {
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="pt-4 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubmissionResult(null);
-                    setTitle('');
-                    setDescription('');
-                    setCategory('Let AI determine category');
-                    setAddress('');
-                    setLatitude(null);
-                    setLongitude(null);
-                    removeImage();
-                  }}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[var(--border)] text-sm font-bold text-[var(--foreground)] hover:bg-[var(--surface-secondary)] transition-colors"
-                >
-                  Submit Another Report
-                </button>
+            {/* 2. Phase 9: Visual Evidence Intelligence Card */}
+            <VisualEvidenceCard
+              imageUrl={submissionResult.report?.image_url || submissionResult.imagePreview}
+              aiAnalysis={submissionResult.aiAnalysis}
+              hasImage={Boolean(submissionResult.imagePreview || submissionResult.report?.image_url)}
+            />
 
-                <button
-                  type="button"
-                  onClick={() => navigate(`/reports/${submissionResult.report?.id}`)}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--primary)] text-white text-sm font-bold shadow-md hover:opacity-90 transition-all"
-                >
-                  <span>View My Report</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
+            {/* 3. Phase 10: Civic Impact Score Card */}
+            <CivicImpactCard metrics={submissionResult.metrics} />
+
+            {/* Action Buttons */}
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmissionResult(null);
+                  setTitle('');
+                  setDescription('');
+                  setCategory('Let AI determine category');
+                  setAddress('');
+                  setLatitude(null);
+                  setLongitude(null);
+                  removeImage();
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[var(--border)] text-sm font-bold text-[var(--foreground)] hover:bg-[var(--surface-secondary)] transition-colors"
+              >
+                Submit Another Report
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/reports/${submissionResult.report?.id}`)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--primary)] text-white text-sm font-bold shadow-md hover:opacity-90 transition-all cursor-pointer"
+              >
+                <span>View My Report</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         ) : (
@@ -408,7 +417,7 @@ export const ReportIssue = () => {
                 Report a Civic Issue
               </h1>
               <p className="text-base text-[var(--muted)] mt-1.5">
-                Tell us what is happening. CivicPulse AI will analyze your report and help identify the right civic response.
+                Tell us what is happening. CivicPulse AI will analyze your report, inspect visual evidence, and calculate civic impact.
               </p>
             </div>
 
@@ -459,24 +468,16 @@ export const ReportIssue = () => {
                   />
                 </div>
 
-                {/* Category Dropdown */}
+                {/* Accessible Category Dropdown Component (Solves contrast/visibility in light & dark mode) */}
                 <div>
-                  <label htmlFor="report-category" className="block text-xs font-bold text-[var(--foreground)] uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-[var(--foreground)] uppercase tracking-wider mb-2">
                     Civic Category
                   </label>
-                  <select
-                    id="report-category"
+                  <CategoryDropdown
                     value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] text-[var(--foreground)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                  >
-                    <option value="Let AI determine category">✨ Let AI determine category (Recommended)</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.name}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setCategory}
+                    departments={departments}
+                  />
                 </div>
               </div>
 
@@ -487,7 +488,7 @@ export const ReportIssue = () => {
                   Visual Evidence (Photo)
                 </h2>
                 <p className="text-xs text-[var(--muted)]">
-                  Add a photo to give the AI visual context to estimate damage severity and urgency.
+                  Attach an image for AI computer vision inspection of infrastructure damage and hazard severity.
                 </p>
 
                 {imagePreview ? (
@@ -546,7 +547,7 @@ export const ReportIssue = () => {
                     type="button"
                     onClick={handleGetLocation}
                     disabled={isLocating}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--border)] text-xs font-bold text-[var(--foreground)] hover:bg-[var(--surface-secondary)] transition-colors disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--border)] text-xs font-bold text-[var(--foreground)] hover:bg-[var(--surface-secondary)] transition-colors disabled:opacity-60 cursor-pointer"
                   >
                     {isLocating ? (
                       <>
@@ -583,7 +584,7 @@ export const ReportIssue = () => {
                 </div>
               </div>
 
-              {/* Submission Status Indicator (during async processing) */}
+              {/* Submission Status Indicator */}
               {isSubmitting && (
                 <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 shadow-sm space-y-4 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2 text-sm font-bold text-[var(--primary)]">
@@ -592,17 +593,17 @@ export const ReportIssue = () => {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                    <div className={`p-2.5 rounded-lg border ${submitStep >= 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' : 'border-[var(--border)] text-[var(--muted)]'}`}>
+                    <div className={`p-2.5 rounded-lg border ${submitStep >= 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 font-bold' : 'border-[var(--border)] text-[var(--muted)]'}`}>
                       {submitStep >= 1 ? '✓' : '○'} Report received
                     </div>
-                    <div className={`p-2.5 rounded-lg border ${submitStep >= 2 ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' : 'border-[var(--border)] text-[var(--muted)]'}`}>
-                      {submitStep >= 2 ? '✓' : '○'} Image processed
+                    <div className={`p-2.5 rounded-lg border ${submitStep >= 2 ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 font-bold' : 'border-[var(--border)] text-[var(--muted)]'}`}>
+                      {submitStep >= 2 ? '✓' : '○'} Evidence processed
                     </div>
                     <div className={`p-2.5 rounded-lg border ${submitStep >= 3 ? 'border-indigo-300 bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-bold animate-pulse' : 'border-[var(--border)] text-[var(--muted)]'}`}>
-                      {submitStep >= 3 ? '●' : '○'} AI analyzing issue
+                      {submitStep >= 3 ? '●' : '○'} AI analyzing
                     </div>
-                    <div className={`p-2.5 rounded-lg border ${submitStep >= 4 ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' : 'border-[var(--border)] text-[var(--muted)]'}`}>
-                      {submitStep >= 4 ? '✓' : '○'} Creating civic case
+                    <div className={`p-2.5 rounded-lg border ${submitStep >= 4 ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 font-bold' : 'border-[var(--border)] text-[var(--muted)]'}`}>
+                      {submitStep >= 4 ? '✓' : '○'} Creating case
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { CivicImpactCard } from '../components/CivicImpactCard';
+import { VisualEvidenceCard } from '../components/VisualEvidenceCard';
 import { getReportById } from '../services/reports';
 import {
   ArrowLeft,
@@ -11,11 +13,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Sparkles,
-  Shield,
   Loader2,
-  FileText,
   Activity,
-  Layers,
   Check
 } from 'lucide-react';
 
@@ -61,7 +60,7 @@ export const ReportDetails = () => {
 
   const timelineSteps = [
     { title: 'Report Submitted', desc: 'Case recorded in CivicPulse municipal registry' },
-    { title: 'AI Analyzed', desc: 'Multimodal diagnostic, priority & impact score calculated' },
+    { title: 'AI Analyzed', desc: 'Multimodal diagnostic, visual inspection & impact score calculated' },
     { title: 'Department Assigned', desc: 'Routed to responsible municipal department' },
     { title: 'In Progress', desc: 'Field inspection and repair operations underway' },
     { title: 'Resolved', desc: 'Civic issue verified and resolved' },
@@ -106,6 +105,23 @@ export const ReportDetails = () => {
   const currentStep = getStatusStepIndex(report.status);
   const ai = report.ai_analysis;
 
+  // Build metrics for CivicImpactCard
+  const metrics = {
+    impact_score: report.impact_score || 50,
+    impact_level: report.impact_score >= 75 ? 'CRITICAL' : report.impact_score >= 50 ? 'HIGH' : report.impact_score >= 25 ? 'MODERATE' : 'LOW',
+    priority: report.priority || 'moderate',
+    severity_score: report.severity || 50,
+    severity_label: report.severity >= 75 ? 'High' : report.severity >= 50 ? 'Moderate' : 'Low',
+    urgency_score: report.urgency || 50,
+    urgency_label: report.urgency >= 75 ? 'High' : report.urgency >= 50 ? 'Medium' : 'Low',
+    public_impact_score: report.public_impact || 50,
+    public_impact_label: report.public_impact >= 75 ? 'High' : report.public_impact >= 50 ? 'Moderate' : 'Low',
+    duration_score: report.duration_days ? Math.min(100, 10 + (report.duration_days - 1) * 10) : 10,
+    duration_label: report.duration_days > 1 ? `Unresolved (${report.duration_days} days)` : 'Newly reported (1 day)',
+    confidence_score: report.evidence_confidence || 80,
+    confidence_label: `${report.evidence_confidence || 80}% Confidence`,
+  };
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col font-sans transition-colors duration-200">
       <Header subtitle={`Case: ${report.case_number}`} />
@@ -131,7 +147,7 @@ export const ReportDetails = () => {
           </div>
         </div>
 
-        {/* Case Title & Main Overview */}
+        {/* 1. Case Information Card */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -169,23 +185,9 @@ export const ReportDetails = () => {
               {report.description}
             </p>
           </div>
-
-          {/* Uploaded Evidence Image */}
-          {report.image_url && (
-            <div className="space-y-2 pt-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Evidence Photo</h3>
-              <div className="rounded-2xl overflow-hidden border border-[var(--border)] max-w-lg bg-[var(--surface-secondary)]">
-                <img
-                  src={report.image_url}
-                  alt={report.title}
-                  className="w-full h-72 object-cover"
-                />
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* AI Civic Intelligence Diagnostic Card */}
+        {/* 2. AI Civic Assessment Diagnostic Card */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
             <div className="flex items-center gap-2.5">
@@ -194,11 +196,11 @@ export const ReportDetails = () => {
               </div>
               <div>
                 <h2 className="text-base font-bold text-[var(--foreground)]">AI Civic Intelligence Assessment</h2>
-                <p className="text-xs text-[var(--muted)]">Structured decision support & impact calculation</p>
+                <p className="text-xs text-[var(--muted)]">Multimodal physical inspection and risk evaluation</p>
               </div>
             </div>
             <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
-              Impact Score: {report.impact_score || 50}/100
+              Confidence: {report.evidence_confidence || 80}%
             </span>
           </div>
 
@@ -230,20 +232,6 @@ export const ReportDetails = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-[var(--surface-secondary)] p-4 rounded-xl border border-[var(--border)]">
-                <strong className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider block mb-1">Recommended Department:</strong>
-                <p className="text-sm font-bold text-[var(--foreground)]">{report.departments?.name || report.category || 'General Civic Services'}</p>
-              </div>
-
-              {ai?.recommended_action && (
-                <div className="bg-[var(--surface-secondary)] p-4 rounded-xl border border-[var(--border)]">
-                  <strong className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider block mb-1">Recommended Action:</strong>
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{ai.recommended_action}</p>
-                </div>
-              )}
-            </div>
-
             {ai?.explanation && (
               <div className="bg-[var(--surface-secondary)] p-4 rounded-xl border border-[var(--border)]">
                 <strong className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider block mb-1">Classification Explanation:</strong>
@@ -253,7 +241,37 @@ export const ReportDetails = () => {
           </div>
         </div>
 
-        {/* Resolution Timeline Tracker */}
+        {/* 3. Phase 9: Visual Evidence Intelligence Card */}
+        <VisualEvidenceCard
+          imageUrl={report.image_url}
+          aiAnalysis={ai}
+          hasImage={Boolean(report.image_url)}
+        />
+
+        {/* 4. Phase 10: Civic Impact Score Card */}
+        <CivicImpactCard metrics={metrics} />
+
+        {/* 5. Recommended Department & Action Card */}
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-sm space-y-4">
+          <h2 className="text-base font-bold text-[var(--foreground)] flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-[var(--primary)]" />
+            Recommended Municipal Action & Routing
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-[var(--surface-secondary)] p-4 rounded-xl border border-[var(--border)]">
+              <strong className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider block mb-1">Responsible Authority:</strong>
+              <p className="text-sm font-bold text-[var(--foreground)]">{report.departments?.name || report.category || 'General Civic Services'}</p>
+            </div>
+
+            <div className="bg-[var(--surface-secondary)] p-4 rounded-xl border border-[var(--border)]">
+              <strong className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider block mb-1">Suggested Municipal Action:</strong>
+              <p className="text-sm font-semibold text-[var(--foreground)]">{ai?.recommended_action || 'Inspect reported site and schedule repair operations.'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 6. Resolution Timeline Tracker */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
           <div className="space-y-1">
             <h2 className="text-base font-bold text-[var(--foreground)]">Resolution Lifecycle Timeline</h2>
@@ -268,7 +286,6 @@ export const ReportDetails = () => {
 
               return (
                 <div key={step.title} className="flex items-start gap-4 relative">
-                  {/* Connecting Vertical Line */}
                   {idx < timelineSteps.length - 1 && (
                     <div
                       className={`absolute left-[15px] top-[30px] bottom-[-24px] w-[2px] ${
@@ -277,7 +294,6 @@ export const ReportDetails = () => {
                     />
                   )}
 
-                  {/* Step Indicator Node */}
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-xs z-10 transition ${
                       isCompleted
@@ -290,7 +306,6 @@ export const ReportDetails = () => {
                     {isCompleted ? <Check className="w-4 h-4" /> : stepNumber}
                   </div>
 
-                  {/* Step Text Content */}
                   <div className="space-y-0.5 pt-0.5">
                     <h4 className={`text-sm font-bold ${isCompleted ? 'text-[var(--foreground)]' : 'text-[var(--muted)]'}`}>
                       {step.title}
