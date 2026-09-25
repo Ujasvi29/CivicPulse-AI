@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
+import { apiClient } from '../services/api';
 
 const AuthContext = createContext({});
 
@@ -36,12 +37,13 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Fallback: Create default profile if missing
+      const userRole = metadata.role === 'admin' ? 'admin' : 'citizen';
       const newProfile = {
         id: userId,
         full_name: metadata.full_name || userEmail.split('@')[0],
         email: userEmail,
-        role: 'citizen',
-        city: metadata.city || 'City Region',
+        role: userRole,
+        city: metadata.city || (userRole === 'admin' ? 'Municipal Administration' : 'City Region'),
       };
 
       const { data: created, error: insertErr } = await supabase
@@ -59,10 +61,11 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error('Profile synchronization error:', err);
+      const userRole = metadata.role === 'admin' ? 'admin' : 'citizen';
       setProfile({
         id: userId,
         email: userEmail,
-        role: 'citizen',
+        role: userRole,
         full_name: metadata.full_name || 'Citizen',
       });
     }
@@ -186,6 +189,74 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const VALID_ADMIN_INVITES = new Set(['cityadmin', 'civic_admin_2026', 'admin2026', 'civic2026', 'admin']);
+
+  const registerAdmin = async ({ fullName, email, password, department, inviteCode }) => {
+    // 1. Verify invitation code
+    const normalizedCode = (inviteCode || '').trim().toLowerCase();
+    if (!VALID_ADMIN_INVITES.has(normalizedCode)) {
+      return {
+        success: false,
+        error: 'Invalid Administrator Invitation Code. Authorization denied.',
+      };
+    }
+
+    // 2. Perform Supabase Auth SignUp with admin role metadata
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            city: department || 'Municipal Administration',
+            role: 'admin',
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Upsert admin profile record
+        const adminProfile = {
+          id: data.user.id,
+          full_name: fullName,
+          email,
+          role: 'admin',
+          city: department || 'Municipal Administration',
+        };
+
+        await supabase.from('profiles').upsert(adminProfile);
+        setProfile(adminProfile);
+
+        // If session created, sign in immediately
+        if (data.session) {
+          setUser(data.user);
+          setSession(data.session);
+          return { success: true, user: data.user, role: 'admin' };
+        } else {
+          // Attempt sign in if email confirmation not strictly required
+          const loginRes = await signIn({ email, password });
+          if (loginRes.success) {
+            return loginRes;
+          }
+          return {
+            success: true,
+            user: data.user,
+            role: 'admin',
+            message: 'Administrator account registered. Please sign in.',
+          };
+        }
+      }
+
+      return { success: false, error: 'Failed to create administrator account.' };
+    } catch (error) {
+      console.error('registerAdmin error:', error);
+      return { success: false, error: humanizeAuthError(error) };
+    }
+  };
+
   const resetPassword = async (email) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -208,6 +279,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin: profile?.role === 'admin',
     loading,
     signUp,
+    registerAdmin,
     signIn,
     signOut,
     resetPassword,

@@ -39,23 +39,28 @@ export const Login = () => {
 
     setLoading(true);
 
-    const result = await signIn({
-      email: formData.email.trim(),
-      password: formData.password,
-    });
+    try {
+      const result = await signIn({
+        email: formData.email.trim(),
+        password: formData.password,
+      });
 
-    setLoading(false);
-
-    if (result.success) {
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (result.role === 'admin') {
-        navigate('/admin', { replace: true });
+      if (result.success) {
+        if (from) {
+          navigate(from, { replace: true });
+        } else if (result.role === 'admin') {
+          navigate('/admin', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       } else {
-        navigate('/dashboard', { replace: true });
+        setErrorMessage(result.error || 'Failed to sign in. Please check your credentials.');
       }
-    } else {
-      setErrorMessage(result.error);
+    } catch (err) {
+      console.error('Login submission error:', err);
+      setErrorMessage(err.message || 'An unexpected authentication error occurred.');
+    } finally {
+      setLoading(false);
     }
   };
 

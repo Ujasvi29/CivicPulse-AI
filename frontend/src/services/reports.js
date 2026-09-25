@@ -199,29 +199,56 @@ export const getPublicReports = async () => {
 };
 
 /**
- * Phase 12: Update civic case status (admin/system only via backend)
+ * Phase 12: Update civic case status (admin/system only via backend or Supabase)
  */
 export const updateReportStatus = async (reportId, { status, message }) => {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
+    const user = sessionData?.session?.user;
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/status`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ status, message }),
-    });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.detail || `Status update failed: ${response.status}`);
+      const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/status`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status, message }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        return { success: true, data };
+      }
+    } catch (backendErr) {
+      console.warn('Backend status update fallback to Supabase:', backendErr.message);
     }
 
-    const data = await response.json();
-    return { success: true, data };
+    // Direct Supabase fallback
+    const { data: reportData, error: reportErr } = await supabase
+      .from('reports')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', reportId)
+      .select()
+      .single();
+
+    if (reportErr) throw reportErr;
+
+    const displayStatus = status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    await supabase.from('report_updates').insert({
+      report_id: reportId,
+      status: displayStatus,
+      message: message || `Status updated to ${displayStatus}`,
+      actor_id: user?.id || null,
+    });
+
+    return { success: true, data: reportData };
   } catch (error) {
     console.error('Error updating report status:', error);
     return { success: false, error: error.message };
@@ -447,29 +474,64 @@ export const adminGetStats = async () => {
 };
 
 /**
- * Admin: Assign department to a report via backend
+ * Admin: Assign department to a report via backend or Supabase
  */
 export const adminAssignDepartment = async (reportId, departmentId) => {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const user = sessionData?.session?.user;
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/department`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ department_id: departmentId }),
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/department`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ department_id: departmentId }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        return { success: true, data };
+      }
+    } catch (backendErr) {
+      console.warn('Backend department assign fallback to Supabase:', backendErr.message);
+    }
+
+    // Direct Supabase fallback
+    const { data: reportData, error: reportErr } = await supabase
+      .from('reports')
+      .update({ recommended_department_id: departmentId, updated_at: new Date().toISOString() })
+      .eq('id', reportId)
+      .select()
+      .maybeSingle();
+
+    if (reportErr) throw reportErr;
+
+    // Fetch department name
+    const { data: dept } = await supabase
+      .from('departments')
+      .select('name')
+      .eq('id', departmentId)
+      .maybeSingle();
+
+    const deptName = dept?.name || 'Department';
+
+    await supabase.from('report_updates').insert({
+      report_id: reportId,
+      status: 'Department Assigned',
+      message: `Case assigned to ${deptName} for resolution.`,
+      actor_id: user?.id || null,
     });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.detail || `Assignment failed: ${response.status}`);
-    }
-    const data = await response.json();
-    return { success: true, data };
+    return { success: true, data: reportData };
   } catch (error) {
     console.error('Admin: error assigning department:', error);
     return { success: false, error: error.message };

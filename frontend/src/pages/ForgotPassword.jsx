@@ -23,13 +23,18 @@ export const ForgotPassword = () => {
     }
 
     setLoading(true);
-    const result = await resetPassword(email.trim());
-    setLoading(false);
-
-    if (result.success) {
-      setSuccess(true);
-    } else {
-      setErrorMessage(result.error);
+    try {
+      const result = await resetPassword(email.trim());
+      if (result.success) {
+        setSuccess(true);
+      } else {
+        setErrorMessage(result.error || 'Failed to send reset instructions.');
+      }
+    } catch (err) {
+      console.error('Password reset error:', err);
+      setErrorMessage(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 

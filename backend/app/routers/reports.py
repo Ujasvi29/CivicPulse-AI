@@ -464,7 +464,7 @@ async def assign_report_department(
 
     # Update report with assigned department
     try:
-        client.table("reports").update({"department_id": payload.department_id}).eq("id", report_id).execute()
+        client.table("reports").update({"recommended_department_id": payload.department_id}).eq("id", report_id).execute()
     except Exception as e:
         logger.error(f"Department assign: update failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to assign department")

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Header } from '../components/Header';
 import { updateUserProfile } from '../services/reports';
@@ -12,16 +12,26 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Landmark,
+  ShieldAlert,
 } from 'lucide-react';
 
 export const Profile = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
+  const isAdmin = profile?.role === 'admin';
 
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [city, setCity] = useState(profile?.city || '');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setCity(profile.city || '');
+    }
+  }, [profile]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,8 +45,8 @@ export const Profile = () => {
 
     setLoading(true);
     const result = await updateUserProfile(user.id, {
-      fullName,
-      city: city || 'City Region',
+      fullName: fullName.trim(),
+      city: city.trim() || (isAdmin ? 'Municipal Administration' : 'City Region'),
     });
     setLoading(false);
 
@@ -50,16 +60,18 @@ export const Profile = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f8fc] dark:bg-[#0b1329] text-[#17233c] dark:text-[#f8fafc] flex flex-col font-sans transition-colors duration-200">
-      <Header subtitle="Civic Profile" />
+      <Header subtitle={isAdmin ? 'Municipal Command Center' : 'Citizen Portal'} />
 
       <main className="max-w-3xl mx-auto w-full p-4 sm:p-6 lg:p-8 flex-1 space-y-8">
         {/* Header */}
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#17233c] dark:text-white tracking-tight">
-            Citizen Profile
+            {isAdmin ? 'Administrator Profile' : 'Citizen Profile'}
           </h1>
           <p className="text-xs sm:text-sm text-[#52627a] dark:text-slate-400">
-            Manage your personal profile and municipal region information.
+            {isAdmin
+              ? 'Manage your municipal administrator credentials and department affiliation.'
+              : 'Manage your personal profile and municipal region information.'}
           </p>
         </div>
 
@@ -82,16 +94,28 @@ export const Profile = () => {
         <div className="civic-card p-6 sm:p-8 space-y-6">
           {/* Identity Header */}
           <div className="flex items-center gap-4 pb-6 border-b border-[#dce5f0] dark:border-[#1e293b]">
-            <div className="w-14 h-14 bg-[#3b6ea8]/10 text-[#3b6ea8] dark:bg-blue-950 dark:text-blue-400 rounded-2xl flex items-center justify-center font-bold text-xl border border-[#3b6ea8]/20">
+            <div
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl border ${
+                isAdmin
+                  ? 'bg-amber-500/10 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border-amber-500/30'
+                  : 'bg-[#3b6ea8]/10 text-[#3b6ea8] dark:bg-blue-950 dark:text-blue-400 border-[#3b6ea8]/20'
+              }`}
+            >
               {profile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase()}
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-[#17233c] dark:text-white">
-                  {profile?.full_name || 'Citizen'}
+                  {profile?.full_name || (isAdmin ? 'Administrator' : 'Citizen')}
                 </h2>
-                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[#3e9b72]/10 text-[#3e9b72] border border-[#3e9b72]/20">
-                  {profile?.role || 'Citizen'}
+                <span
+                  className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded border ${
+                    isAdmin
+                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                      : 'bg-[#3e9b72]/10 text-[#3e9b72] dark:text-emerald-400 border-[#3e9b72]/20'
+                  }`}
+                >
+                  {isAdmin ? 'ADMINISTRATOR' : 'CITIZEN'}
                 </span>
               </div>
               <p className="text-xs text-[#52627a] dark:text-slate-400 font-mono">
@@ -104,7 +128,7 @@ export const Profile = () => {
             {/* Full Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[#17233c] dark:text-slate-200 block">
-                Full Name
+                {isAdmin ? 'Official Full Name' : 'Full Name'}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#718096]">
@@ -138,30 +162,35 @@ export const Profile = () => {
               </div>
             </div>
 
-            {/* City / Region */}
+            {/* City / Department */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[#17233c] dark:text-slate-200 block">
-                City / Municipality
+                {isAdmin ? 'Department / Office' : 'City / Municipality'}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#718096]">
-                  <Building2 className="w-4 h-4" />
+                  {isAdmin ? <Landmark className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
                 </div>
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Austin, TX"
+                  placeholder={isAdmin ? 'e.g. Roads & Infrastructure' : 'e.g. Austin, TX'}
                   className="w-full pl-10 pr-4 py-2.5 bg-[#f5f8fc] dark:bg-[#0b1329] border border-[#dce5f0] dark:border-[#1e293b] rounded-xl text-sm text-[#17233c] dark:text-slate-100 placeholder-[#718096] focus:outline-none focus:border-[#3b6ea8] transition font-medium"
                 />
               </div>
             </div>
 
-            {/* Role (Read Only) */}
+            {/* Role (Read Only - Protected against tampering) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#17233c] dark:text-slate-200 block">
-                Application Role
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[#17233c] dark:text-slate-200 block">
+                  Application Role (Immutable via Client)
+                </label>
+                <span className="text-[10px] text-[#718096] dark:text-slate-500 font-medium">
+                  Verified by Server Authority
+                </span>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#718096]">
                   <ShieldCheck className="w-4 h-4" />
@@ -169,8 +198,8 @@ export const Profile = () => {
                 <input
                   type="text"
                   disabled
-                  value={profile?.role?.toUpperCase() || 'CITIZEN'}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[#f5f8fc] dark:bg-[#0b1329] border border-[#dce5f0] dark:border-[#1e293b] rounded-xl text-sm text-[#718096] dark:text-slate-400 font-mono opacity-80 cursor-not-allowed"
+                  value={profile?.role ? profile.role.toUpperCase() : 'CITIZEN'}
+                  className="w-full pl-10 pr-4 py-2.5 bg-[#f5f8fc] dark:bg-[#0b1329] border border-[#dce5f0] dark:border-[#1e293b] rounded-xl text-sm font-mono font-bold tracking-wider text-[#3b6ea8] dark:text-blue-400 opacity-90 cursor-not-allowed"
                 />
               </div>
             </div>

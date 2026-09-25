@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from app.services.supabase import check_db_connection, get_supabase_client
 from app.routers.reports import router as reports_router
+from app.routers.auth import router as auth_router
 
 load_dotenv()
 
@@ -33,6 +34,7 @@ app.add_middleware(
 
 # Mount Routers
 app.include_router(reports_router)
+app.include_router(auth_router)
 
 @app.get("/health")
 async def health_check():

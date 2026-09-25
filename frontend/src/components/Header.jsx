@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Zap, Sun, Moon, LogOut, User, ShieldCheck, Menu, X, PlusCircle, FileText, MapPin, BarChart3, Activity } from 'lucide-react';
 
-export const Header = ({ subtitle = 'Citizen Portal' }) => {
+export const Header = ({ subtitle }) => {
   const { user, profile, signOut } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdmin = profile?.role === 'admin';
+
+  const displaySubtitle = subtitle || (isAdmin ? 'Municipal Command Center' : 'Citizen Portal');
 
   const authNavItems = [
     { name: 'Dashboard', path: '/dashboard', icon: Zap },
@@ -21,9 +23,10 @@ export const Header = ({ subtitle = 'Citizen Portal' }) => {
 
   const adminNavItems = [
     { name: 'Command Center', path: '/admin', icon: Activity },
-    { name: 'All Reports', path: '/admin/reports', icon: FileText },
+    { name: 'Reports', path: '/admin/reports', icon: FileText },
     { name: 'Civic Map', path: '/admin/map', icon: MapPin },
     { name: 'Analytics', path: '/admin/analytics', icon: BarChart3 },
+    { name: 'Profile', path: '/profile', icon: User },
   ];
 
   const publicNavItems = [
@@ -35,7 +38,7 @@ export const Header = ({ subtitle = 'Citizen Portal' }) => {
     <header className="bg-white dark:bg-[#111c38] border-b border-[#dce5f0] dark:border-[#1e293b] px-4 sm:px-6 py-3 sticky top-0 z-50 transition-colors duration-200 shadow-xs">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Brand Identity */}
-        <Link to="/" className="flex items-center gap-2.5 group">
+        <Link to={isAdmin ? '/admin' : '/'} className="flex items-center gap-2.5 group">
           <div className="p-2 bg-[#3b6ea8]/10 dark:bg-blue-600/20 border border-[#3b6ea8]/20 dark:border-blue-500/30 rounded-xl text-[#3b6ea8] dark:text-blue-400 group-hover:scale-105 transition">
             <Zap className="w-5 h-5" />
           </div>
@@ -44,7 +47,7 @@ export const Header = ({ subtitle = 'Citizen Portal' }) => {
               CivicPulse AI
             </span>
             <span className="text-[11px] text-[#52627a] dark:text-slate-400 block font-medium">
-              {subtitle}
+              {displaySubtitle}
             </span>
           </div>
         </Link>

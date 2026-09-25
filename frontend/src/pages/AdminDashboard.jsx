@@ -153,21 +153,39 @@ function AdminCaseDetail({ reportId, onBack }) {
     if (!selectedStatus) return;
     setStatusSaving(true);
     setSaveResult(null);
-    const msg = statusMsg || STATUS_MESSAGES[selectedStatus] || '';
-    const res = await updateReportStatus(reportId, { status: selectedStatus, message: msg });
-    setSaveResult(res.success ? { ok: true, text: 'Status updated successfully.' } : { ok: false, text: res.error });
-    if (res.success) setReport(prev => ({ ...prev, status: selectedStatus }));
-    setStatusSaving(false);
+    try {
+      const msg = statusMsg || STATUS_MESSAGES[selectedStatus] || '';
+      const res = await updateReportStatus(reportId, { status: selectedStatus, message: msg });
+      setSaveResult(res.success ? { ok: true, text: 'Status updated successfully.' } : { ok: false, text: res.error || 'Failed to update status.' });
+      if (res.success) setReport(prev => ({ ...prev, status: selectedStatus }));
+    } catch (err) {
+      console.error('handleStatusUpdate error:', err);
+      setSaveResult({ ok: false, text: err.message || 'Error updating status' });
+    } finally {
+      setStatusSaving(false);
+    }
   };
 
   const handleDeptAssign = async () => {
     if (!selectedDeptId) return;
     setDeptSaving(true);
     setSaveResult(null);
-    const res = await adminAssignDepartment(reportId, selectedDeptId);
-    setSaveResult(res.success ? { ok: true, text: 'Department assigned successfully.' } : { ok: false, text: res.error });
-    if (res.success) setReport(prev => ({ ...prev, department_id: selectedDeptId }));
-    setDeptSaving(false);
+    try {
+      const res = await adminAssignDepartment(reportId, selectedDeptId);
+      setSaveResult(res.success ? { ok: true, text: 'Department assigned successfully.' } : { ok: false, text: res.error || 'Failed to assign department.' });
+      if (res.success) {
+        setReport(prev => ({
+          ...prev,
+          department_id: selectedDeptId,
+          recommended_department_id: selectedDeptId,
+        }));
+      }
+    } catch (err) {
+      console.error('handleDeptAssign error:', err);
+      setSaveResult({ ok: false, text: err.message || 'Error assigning department' });
+    } finally {
+      setDeptSaving(false);
+    }
   };
 
   if (loading) {
@@ -183,7 +201,7 @@ function AdminCaseDetail({ reportId, onBack }) {
 
   const ai = report.ai_analysis;
   const aiDeptName = ai?.departments?.name || ai?.recommended_department || null;
-  const assignedDept = departments.find(d => d.id === (report.department_id));
+  const assignedDept = departments.find(d => d.id === (report.recommended_department_id || report.department_id));
   const timeline = report.updates || [];
 
   return (
