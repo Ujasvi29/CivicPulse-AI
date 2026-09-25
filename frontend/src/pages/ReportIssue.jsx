@@ -261,6 +261,17 @@ export const ReportIssue = () => {
                 </span>
               </div>
 
+              {/* Disagreement Notice if AI adjusted the category */}
+              {submissionResult.aiAnalysis?.citizen_category_disagreement && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold block">Category Refined by AI:</strong>
+                    Citizen suggested <span className="font-semibold underline">{submissionResult.aiAnalysis.citizen_suggested_category}</span>. Gemini AI determined <span className="font-semibold underline">{submissionResult.aiAnalysis.category}</span> based on physical evidence.
+                  </div>
+                </div>
+              )}
+
               {/* Assessment Badges Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-[var(--surface-secondary)] border border-[var(--border)] p-4 rounded-xl">
@@ -268,7 +279,7 @@ export const ReportIssue = () => {
                     Severity
                   </span>
                   <span className="inline-flex items-center text-sm font-black text-rose-600 dark:text-rose-400">
-                    {submissionResult.aiAnalysis?.severity_label || 'High'}
+                    {submissionResult.aiAnalysis?.severity_label || submissionResult.aiAnalysis?.severity || 'High'}
                   </span>
                 </div>
                 <div className="bg-[var(--surface-secondary)] border border-[var(--border)] p-4 rounded-xl">
@@ -276,7 +287,7 @@ export const ReportIssue = () => {
                     Urgency
                   </span>
                   <span className="inline-flex items-center text-sm font-black text-amber-600 dark:text-amber-400">
-                    {submissionResult.aiAnalysis?.urgency_label || 'Medium'}
+                    {submissionResult.aiAnalysis?.urgency_label || submissionResult.aiAnalysis?.urgency || 'Medium'}
                   </span>
                 </div>
                 <div className="bg-[var(--surface-secondary)] border border-[var(--border)] p-4 rounded-xl">
@@ -284,7 +295,7 @@ export const ReportIssue = () => {
                     Public Impact
                   </span>
                   <span className="inline-flex items-center text-sm font-black text-sky-600 dark:text-sky-400">
-                    {submissionResult.aiAnalysis?.public_impact_label || 'Moderate'}
+                    {submissionResult.aiAnalysis?.public_impact_label || submissionResult.aiAnalysis?.public_impact || 'Moderate'}
                   </span>
                 </div>
                 <div className="bg-[var(--surface-secondary)] border border-[var(--border)] p-4 rounded-xl">
@@ -292,10 +303,20 @@ export const ReportIssue = () => {
                     Evidence Confidence
                   </span>
                   <span className="inline-flex items-center text-sm font-black text-emerald-600 dark:text-emerald-400">
-                    {submissionResult.aiAnalysis?.evidence_confidence_percent || '85%'}
+                    {submissionResult.aiAnalysis?.evidence_confidence_percent || `${Math.round((submissionResult.aiAnalysis?.evidence_confidence || 0.8) * 100)}%`}
                   </span>
                 </div>
               </div>
+
+              {/* Subcategory & Classification */}
+              {submissionResult.aiAnalysis?.subcategory && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-[var(--muted)] font-semibold">Identified Subcategory:</span>
+                  <span className="font-bold px-2.5 py-1 rounded-md bg-[var(--surface-secondary)] border border-[var(--border)] text-[var(--foreground)]">
+                    {submissionResult.aiAnalysis.subcategory}
+                  </span>
+                </div>
+              )}
 
               {/* Detailed Findings */}
               <div className="space-y-4 pt-2">
