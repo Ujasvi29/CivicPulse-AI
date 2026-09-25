@@ -420,3 +420,70 @@ async def update_report_status(
         "message": update_message,
     }
 
+
+class DepartmentAssignRequest(BaseModel):
+    department_id: str = Field(..., description="UUID of the department to assign")
+
+
+@router.patch("/{report_id}/department", status_code=status.HTTP_200_OK)
+async def assign_report_department(
+    report_id: str,
+    payload: DepartmentAssignRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Phase 13: Admin assigns a civic department to a report.
+    Updates reports.assigned_department_id and appends a timeline entry.
+    """
+    auth_user_id = get_current_user_id(authorization)
+    client = get_supabase_client()
+
+    # Verify report exists
+    try:
+        report_res = client.table("reports").select("id, case_number, status").eq("id", report_id).execute()
+        if not report_res.data:
+            raise HTTPException(status_code=404, detail="Civic report not found")
+        report = report_res.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Department assign: report lookup failed: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    # Verify department exists
+    try:
+        dept_res = client.table("departments").select("id, name").eq("id", payload.department_id).execute()
+        if not dept_res.data:
+            raise HTTPException(status_code=404, detail="Department not found")
+        dept_name = dept_res.data[0]["name"]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Department assign: dept lookup failed: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    # Update report with assigned department
+    try:
+        client.table("reports").update({"department_id": payload.department_id}).eq("id", report_id).execute()
+    except Exception as e:
+        logger.error(f"Department assign: update failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to assign department")
+
+    # Append timeline event
+    try:
+        client.table("report_updates").insert({
+            "report_id": report_id,
+            "status": "Department Assigned",
+            "message": f"Case assigned to {dept_name} for resolution.",
+            "actor_id": auth_user_id,
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Department assign: timeline insert failed: {e}")
+
+    return {
+        "success": True,
+        "report_id": report_id,
+        "case_number": report.get("case_number"),
+        "assigned_department_id": payload.department_id,
+        "assigned_department_name": dept_name,
+    }

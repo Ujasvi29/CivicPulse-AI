@@ -272,3 +272,206 @@ export const updateUserProfile = async (userId, { fullName, city }) => {
     return { success: false, error: error.message };
   }
 };
+
+// ─── Phase 13/14: Admin Services ─────────────────────────────────────────────
+
+/**
+ * Admin: Fetch ALL reports with AI analysis and departments joined
+ */
+export const adminGetAllReports = async ({ limit = 200, status: statusFilter, category } = {}) => {
+  try {
+    let query = supabase
+      .from('reports')
+      .select('*, departments(id, name)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (statusFilter && statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (category && category !== 'all') query = query.eq('category', category);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Admin: error fetching all reports:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Admin: Aggregate dashboard statistics from real Supabase data
+ */
+export const adminGetStats = async () => {
+  try {
+    const { data: all, error } = await supabase
+      .from('reports')
+      .select('id, status, priority, category, created_at, latitude, longitude, impact_score');
+
+    if (error) throw error;
+    const reports = all || [];
+
+    const total = reports.length;
+    const critical = reports.filter(r => (r.priority || '').toLowerCase() === 'critical').length;
+    const resolved = reports.filter(r => (r.status || '').toLowerCase() === 'resolved').length;
+    const pending = reports.filter(r => (r.status || '').toLowerCase() !== 'resolved').length;
+    const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+    // Category distribution
+    const catMap = {};
+    reports.forEach(r => {
+      const cat = r.category || 'General Civic Services';
+      catMap[cat] = (catMap[cat] || 0) + 1;
+    });
+    const categoryDistribution = Object.entries(catMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Status distribution
+    const statusMap = {};
+    reports.forEach(r => {
+      const s = r.status || 'submitted';
+      statusMap[s] = (statusMap[s] || 0) + 1;
+    });
+    const statusDistribution = Object.entries(statusMap)
+      .map(([name, count]) => ({ name: name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), count }));
+
+    // Priority distribution
+    const priorityOrder = ['Critical', 'High', 'Moderate', 'Low'];
+    const priorityMap = {};
+    reports.forEach(r => {
+      const p = r.priority ? (r.priority.charAt(0).toUpperCase() + r.priority.slice(1).toLowerCase()) : 'Moderate';
+      priorityMap[p] = (priorityMap[p] || 0) + 1;
+    });
+    const priorityDistribution = priorityOrder
+      .map(name => ({ name, count: priorityMap[name] || 0 }));
+
+    // Critical cases
+    const criticalCases = reports
+      .filter(r => (r.priority || '').toLowerCase() === 'critical')
+      .slice(0, 10);
+
+    // Civic trends — last 30 days grouped by day
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const trendMap = {};
+    reports.forEach(r => {
+      const d = new Date(r.created_at);
+      if (d >= thirtyDaysAgo) {
+        const dayKey = d.toISOString().slice(0, 10);
+        trendMap[dayKey] = (trendMap[dayKey] || 0) + 1;
+      }
+    });
+    // Fill all days with 0 if missing
+    const trendData = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const key = d.toISOString().slice(0, 10);
+      trendData.push({ date: key, count: trendMap[key] || 0 });
+    }
+
+    // Hotspot detection — grid-based clustering (round to 2 decimal places ≈ ~1km)
+    const hotspotMap = {};
+    reports.forEach(r => {
+      if (r.latitude && r.longitude) {
+        const latKey = Math.round(r.latitude * 100) / 100;
+        const lngKey = Math.round(r.longitude * 100) / 100;
+        const key = `${latKey},${lngKey}`;
+        if (!hotspotMap[key]) {
+          hotspotMap[key] = { lat: latKey, lng: lngKey, reports: [] };
+        }
+        hotspotMap[key].reports.push(r);
+      }
+    });
+    const hotspots = Object.values(hotspotMap)
+      .filter(h => h.reports.length >= 1)
+      .sort((a, b) => b.reports.length - a.reports.length)
+      .slice(0, 5)
+      .map(h => {
+        const cats = {};
+        let topPriority = 'Low';
+        const priorOrder = ['Critical', 'High', 'Moderate', 'Low'];
+        h.reports.forEach(r => {
+          const c = r.category || 'General';
+          cats[c] = (cats[c] || 0) + 1;
+          const rp = r.priority ? (r.priority.charAt(0).toUpperCase() + r.priority.slice(1).toLowerCase()) : 'Low';
+          if (priorOrder.indexOf(rp) < priorOrder.indexOf(topPriority)) topPriority = rp;
+        });
+        const topCategory = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]?.[0] || 'General';
+        return {
+          lat: h.lat,
+          lng: h.lng,
+          count: h.reports.length,
+          topCategory,
+          topPriority,
+        };
+      });
+
+    // AI civic insights — deterministic from data
+    const topCategory = categoryDistribution[0]?.name || null;
+    const topCategoryCount = categoryDistribution[0]?.count || 0;
+    const insights = [];
+    if (topCategory) {
+      insights.push(`Most reported issue: ${topCategory} (${topCategoryCount} reports).`);
+    }
+    if (critical > 0) {
+      insights.push(`${critical} critical case${critical > 1 ? 's' : ''} require immediate municipal attention.`);
+    }
+    if (resolutionRate > 0) {
+      insights.push(`Current resolution rate: ${resolutionRate}% (${resolved} of ${total} cases resolved).`);
+    }
+    if (hotspots.length > 0) {
+      insights.push(`Highest report concentration: near coordinates ${hotspots[0].lat}°, ${hotspots[0].lng}° (${hotspots[0].count} reports).`);
+    }
+    if (pending > 0 && resolved === 0) {
+      insights.push(`${pending} report${pending > 1 ? 's are' : ' is'} pending action — no cases resolved yet.`);
+    }
+
+    return {
+      success: true,
+      stats: {
+        total, critical, resolved, pending, resolutionRate,
+        categoryDistribution,
+        statusDistribution,
+        priorityDistribution,
+        criticalCases,
+        trendData,
+        hotspots,
+        insights,
+        mostReportedCategory: topCategory,
+      },
+    };
+  } catch (error) {
+    console.error('Admin: error fetching stats:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Admin: Assign department to a report via backend
+ */
+export const adminAssignDepartment = async (reportId, departmentId) => {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/department`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ department_id: departmentId }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Assignment failed: ${response.status}`);
+    }
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error('Admin: error assigning department:', error);
+    return { success: false, error: error.message };
+  }
+};

@@ -15,6 +15,7 @@ import { ReportDetails } from './pages/ReportDetails';
 import { Community } from './pages/Community';
 import { Profile } from './pages/Profile';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { CivicAnalytics } from './pages/CivicAnalytics';
 
 function App() {
   return (
@@ -123,7 +124,7 @@ function App() {
               path="/admin/analytics"
               element={
                 <AdminRoute>
-                  <AdminDashboard />
+                  <CivicAnalytics />
                 </AdminRoute>
               }
             />

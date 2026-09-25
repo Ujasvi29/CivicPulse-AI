@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Check, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronUp, Check, Sparkles } from 'lucide-react';
 
 export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const containerRef = useRef(null);
 
   const defaultOption = { id: 'ai-auto', name: 'Let AI determine category' };
   const allOptions = [defaultOption, ...departments];
@@ -11,7 +11,7 @@ export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
@@ -45,8 +45,8 @@ export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
   const isAiSelected = selectedName === defaultOption.name;
 
   return (
-    <div className="relative w-full" ref={dropdownRef}>
-      {/* Trigger Button */}
+    <div ref={containerRef} className="w-full">
+      {/* ── Trigger Button ── */}
       <button
         type="button"
         id="category-dropdown-trigger"
@@ -54,7 +54,7 @@ export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
         aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
         onKeyDown={handleKeyDown}
-        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] text-[var(--foreground)] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-all cursor-pointer shadow-xs"
+        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] text-[var(--foreground)] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-all cursor-pointer"
       >
         <div className="flex items-center gap-2 truncate min-w-0">
           {isAiSelected && <Sparkles className="w-4 h-4 text-indigo-500 shrink-0" />}
@@ -62,23 +62,18 @@ export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
             {isAiSelected ? '✨ Let AI determine category (Recommended)' : selectedName}
           </span>
         </div>
-        <ChevronDown
-          className={`w-4 h-4 text-[var(--muted)] transition-transform duration-200 shrink-0 ml-2 ${
-            isOpen ? 'rotate-180' : ''
-          }`}
-        />
+        <span className="ml-2 shrink-0 text-[var(--muted)]">
+          {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </span>
       </button>
 
-      {/* Dropdown Panel — absolute positioned, bounded height, never pushes layout */}
+      {/* ── Option List — in document flow, pushes content below ── */}
       {isOpen && (
         <ul
           role="listbox"
           aria-labelledby="category-dropdown-trigger"
+          className="w-full mt-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg overflow-y-auto"
           style={{ maxHeight: '220px' }}
-          className="absolute z-50 left-0 right-0 top-full mt-1.5 py-1.5 rounded-xl
-            bg-[var(--surface)] border border-[var(--border)] shadow-2xl
-            overflow-y-auto font-sans focus:outline-none
-            animate-in fade-in zoom-in-95 duration-150"
         >
           {allOptions.map((option) => {
             const isSelected = option.name === selectedName;
@@ -93,7 +88,7 @@ export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
                   onChange(option.name);
                   setIsOpen(false);
                 }}
-                className={`flex items-center justify-between px-4 py-2.5 mx-1.5 my-0.5 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+                className={`flex items-center justify-between px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors border-b border-[var(--border)] last:border-b-0 ${
                   isSelected
                     ? 'bg-[var(--primary)] text-white font-bold'
                     : 'text-[var(--foreground)] hover:bg-[var(--surface-secondary)]'
@@ -101,13 +96,14 @@ export const CategoryDropdown = ({ value, onChange, departments = [] }) => {
               >
                 <div className="flex items-center gap-2 truncate min-w-0">
                   {isOptionAi && (
-                    <Sparkles className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-indigo-500'}`} />
+                    <Sparkles
+                      className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-indigo-500'}`}
+                    />
                   )}
                   <span className="truncate">
                     {isOptionAi ? 'Let AI determine category (Recommended)' : option.name}
                   </span>
                 </div>
-
                 {isSelected && <Check className="w-4 h-4 shrink-0 ml-2" />}
               </li>
             );

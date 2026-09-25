@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Zap, Sun, Moon, LogOut, User, ShieldCheck, Menu, X, PlusCircle, FileText, MapPin } from 'lucide-react';
+import { Zap, Sun, Moon, LogOut, User, ShieldCheck, Menu, X, PlusCircle, FileText, MapPin, BarChart3, Activity } from 'lucide-react';
 
 export const Header = ({ subtitle = 'Citizen Portal' }) => {
   const { user, profile, signOut } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isAdmin = profile?.role === 'admin';
 
   const authNavItems = [
     { name: 'Dashboard', path: '/dashboard', icon: Zap },
@@ -16,6 +17,13 @@ export const Header = ({ subtitle = 'Citizen Portal' }) => {
     { name: 'My Reports', path: '/reports', icon: FileText },
     { name: 'Community', path: '/community', icon: MapPin },
     { name: 'Profile', path: '/profile', icon: User },
+  ];
+
+  const adminNavItems = [
+    { name: 'Command Center', path: '/admin', icon: Activity },
+    { name: 'All Reports', path: '/admin/reports', icon: FileText },
+    { name: 'Civic Map', path: '/admin/map', icon: MapPin },
+    { name: 'Analytics', path: '/admin/analytics', icon: BarChart3 },
   ];
 
   const publicNavItems = [
@@ -44,8 +52,9 @@ export const Header = ({ subtitle = 'Citizen Portal' }) => {
         {/* Center Navigation Links (Desktop) */}
         {user ? (
           <nav className="hidden md:flex items-center gap-1 bg-[#f5f8fc] dark:bg-[#0b1329] p-1 rounded-xl border border-[#dce5f0] dark:border-[#1e293b]">
-            {authNavItems.map((item) => {
-              const isActive = location.pathname === item.path;
+            {(isAdmin ? adminNavItems : authNavItems).map((item) => {
+              const isActive = location.pathname === item.path ||
+                (isAdmin && item.path !== '/admin' && location.pathname.startsWith(item.path));
               return (
                 <Link
                   key={item.name}
@@ -162,7 +171,7 @@ export const Header = ({ subtitle = 'Citizen Portal' }) => {
                   {profile?.role === 'admin' ? 'ADMIN' : 'CITIZEN'}
                 </span>
               </div>
-              {authNavItems.map((item) => {
+              {(isAdmin ? adminNavItems : authNavItems).map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <Link
