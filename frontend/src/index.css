@@ -5,6 +5,21 @@
 
 @layer base {
   :root {
+    --background: #f5f8fc;
+    --foreground: #17233c;
+    --surface: #ffffff;
+    --surface-secondary: #edf2f7;
+    --border: #dce5f0;
+    --muted: #52627a;
+    --primary: #3b6ea8;
+    --primary-hover: #2e598b;
+    --secondary: #3fa7a3;
+    --accent: #6477c8;
+    --success: #3e9b72;
+    --warning: #c28a3a;
+    --error: #c85c5c;
+
+    /* Legacy token aliases */
     --bg-main: #f5f8fc;
     --bg-surface: #ffffff;
     --bg-surface-secondary: #edf2f7;
@@ -23,6 +38,21 @@
   }
 
   .dark {
+    --background: #0b1329;
+    --foreground: #f8fafc;
+    --surface: #111c38;
+    --surface-secondary: #172447;
+    --border: #1e293b;
+    --muted: #94a3b8;
+    --primary: #4a80c0;
+    --primary-hover: #6095d8;
+    --secondary: #2dd4bf;
+    --accent: #818cf8;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --error: #f87171;
+
+    /* Legacy token aliases */
     --bg-main: #0b1329;
     --bg-surface: #111c38;
     --bg-surface-secondary: #172447;
@@ -45,17 +75,18 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--bg-main);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   transition: background-color 0.15s ease, color 0.15s ease;
+  overflow-x: hidden;
 }
 
 /* Civic Card Design Tokens */
 .civic-card {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
   border-radius: 16px;
 }
@@ -65,7 +96,33 @@ body {
 }
 
 .civic-card-interactive:hover {
-  background-color: var(--bg-surface-secondary);
-  border-color: var(--color-primary);
+  background-color: var(--surface-secondary);
+  border-color: var(--primary);
   transform: translateY(-2px);
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
