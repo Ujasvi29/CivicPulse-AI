@@ -1,11 +1,13 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --bg-main: #f5f8fc;
     --bg-surface: #ffffff;
-    --bg-surface-hover: #edf2f7;
+    --bg-surface-secondary: #edf2f7;
     --border-color: #dce5f0;
     --text-primary: #17233c;
     --text-secondary: #52627a;
@@ -23,7 +25,7 @@
   .dark {
     --bg-main: #0b1329;
     --bg-surface: #111c38;
-    --bg-surface-hover: #172447;
+    --bg-surface-secondary: #172447;
     --border-color: #1e293b;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
@@ -47,7 +49,7 @@ body {
   color: var(--text-primary);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* Civic Card Design Tokens */
@@ -63,7 +65,7 @@ body {
 }
 
 .civic-card-interactive:hover {
-  background-color: var(--bg-surface-hover);
+  background-color: var(--bg-surface-secondary);
   border-color: var(--color-primary);
   transform: translateY(-2px);
 }

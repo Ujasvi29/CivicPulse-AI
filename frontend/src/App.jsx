@@ -9,6 +9,11 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { CitizenDashboard } from './pages/CitizenDashboard';
+import { ReportIssue } from './pages/ReportIssue';
+import { MyReports } from './pages/MyReports';
+import { ReportDetails } from './pages/ReportDetails';
+import { Community } from './pages/Community';
+import { Profile } from './pages/Profile';
 import { AdminDashboard } from './pages/AdminDashboard';
 
 function App() {
@@ -36,7 +41,7 @@ function App() {
               path="/reports"
               element={
                 <ProtectedRoute>
-                  <CitizenDashboard />
+                  <MyReports />
                 </ProtectedRoute>
               }
             />
@@ -44,7 +49,7 @@ function App() {
               path="/reports/:id"
               element={
                 <ProtectedRoute>
-                  <CitizenDashboard />
+                  <ReportDetails />
                 </ProtectedRoute>
               }
             />
@@ -52,7 +57,15 @@ function App() {
               path="/report/new"
               element={
                 <ProtectedRoute>
-                  <CitizenDashboard />
+                  <ReportIssue />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/community"
+              element={
+                <ProtectedRoute>
+                  <Community />
                 </ProtectedRoute>
               }
             />
@@ -60,7 +73,7 @@ function App() {
               path="/map"
               element={
                 <ProtectedRoute>
-                  <CitizenDashboard />
+                  <Community />
                 </ProtectedRoute>
               }
             />
@@ -68,7 +81,7 @@ function App() {
               path="/profile"
               element={
                 <ProtectedRoute>
-                  <CitizenDashboard />
+                  <Profile />
                 </ProtectedRoute>
               }
             />

@@ -13,10 +13,10 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('civicpulse_theme');
-    if (savedTheme) {
+    if (savedTheme === 'dark' || savedTheme === 'light') {
       return savedTheme;
     }
-    // Default to Light Mode as requested in design spec
+    // Default to Light Mode
     return 'light';
   });
 
@@ -24,8 +24,12 @@ export const ThemeProvider = ({ children }) => {
     const root = document.documentElement;
     if (theme === 'dark') {
       root.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+      document.body.classList.add('dark');
     } else {
       root.classList.remove('dark');
+      root.setAttribute('data-theme', 'light');
+      document.body.classList.remove('dark');
     }
     localStorage.setItem('civicpulse_theme', theme);
   }, [theme]);
