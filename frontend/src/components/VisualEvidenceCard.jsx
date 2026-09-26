@@ -1,16 +1,60 @@
-import { Eye, Image as ImageIcon, ShieldCheck, AlertCircle, Info, Sparkles } from 'lucide-react';
+import { Eye, Image as ImageIcon, Sparkles } from 'lucide-react';
 
-export const VisualEvidenceCard = ({ imageUrl, aiAnalysis, hasImage = false }) => {
-  const visualFindings = aiAnalysis?.visual_findings || (hasImage || imageUrl ? 'Visual physical defects detected in uploaded image.' : 'No photographic evidence provided. Diagnostic based on citizen description.');
-  const visualSeverity = aiAnalysis?.visual_severity || aiAnalysis?.severity || 'Moderate';
-  const visualConfidence = aiAnalysis?.visual_confidence !== null && aiAnalysis?.visual_confidence !== undefined
-    ? `${Math.round(aiAnalysis.visual_confidence * 100)}%`
-    : aiAnalysis?.evidence_confidence_percent || `${Math.round((aiAnalysis?.evidence_confidence || 0.8) * 100)}%`;
+export const VisualEvidenceCard = ({ imageUrl, aiAnalysis, analysis, hasImage = false }) => {
+  const activeAi = aiAnalysis || analysis || null;
+
+  // Attempt to extract visual findings from raw_response JSON if stored there
+  let rawJson = null;
+  if (activeAi?.raw_response) {
+    if (typeof activeAi.raw_response === 'object') {
+      try {
+        const text = activeAi.raw_response?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          // If markdown-wrapped json
+          const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+          rawJson = JSON.parse(cleaned);
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+  }
+
+  const visualFindings = activeAi?.visual_findings
+    || rawJson?.visual_findings
+    || (hasImage || imageUrl
+      ? 'Visual physical defects detected in uploaded image.'
+      : 'No photographic evidence provided. Diagnostic based on citizen description.');
+
+  // Safely determine visual severity (can be string or number)
+  let visualSeverity = activeAi?.visual_severity || rawJson?.visual_severity;
+  if (!visualSeverity || typeof visualSeverity !== 'string') {
+    if (typeof activeAi?.severity === 'string') {
+      visualSeverity = activeAi.severity;
+    } else if (typeof activeAi?.severity === 'number') {
+      visualSeverity = activeAi.severity >= 75 ? 'Critical' : activeAi.severity >= 50 ? 'Moderate' : 'Low';
+    } else {
+      visualSeverity = 'Moderate';
+    }
+  }
+
+  // Safely format visual confidence
+  let visualConfidence = '80%';
+  const rawConf = activeAi?.visual_confidence ?? rawJson?.visual_confidence ?? activeAi?.evidence_confidence;
+  if (rawConf !== null && rawConf !== undefined) {
+    const num = Number(rawConf);
+    if (!isNaN(num)) {
+      visualConfidence = num <= 1 ? `${Math.round(num * 100)}%` : `${Math.round(num)}%`;
+    }
+  } else if (activeAi?.evidence_confidence_percent) {
+    visualConfidence = String(activeAi.evidence_confidence_percent);
+  }
 
   const isPhotoAvailable = Boolean(imageUrl || hasImage);
 
   const getSeverityBadgeClass = (sev) => {
-    switch (sev?.toLowerCase()) {
+    const s = typeof sev === 'string' ? sev.toLowerCase() : '';
+    switch (s) {
       case 'critical':
         return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
       case 'high':
@@ -112,13 +156,13 @@ export const VisualEvidenceCard = ({ imageUrl, aiAnalysis, hasImage = false }) =
           </div>
 
           {/* AI Evidence Explanation */}
-          {aiAnalysis?.explanation && (
+          {activeAi?.explanation && (
             <div className="p-4 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] space-y-1">
               <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">
                 Visual Context & Evidence Correlation
               </h3>
               <p className="text-xs text-[var(--muted)] leading-relaxed">
-                {aiAnalysis.explanation}
+                {activeAi.explanation}
               </p>
             </div>
           )}

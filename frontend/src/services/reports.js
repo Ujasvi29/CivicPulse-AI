@@ -142,41 +142,67 @@ export const getUserReports = async (userId) => {
  */
 export const getReportById = async (reportId) => {
   try {
-    // 1. Fetch report details
+    // 1. Try Supabase direct query
     const { data: report, error: reportErr } = await supabase
       .from('reports')
       .select('*, departments(id, name, description)')
       .eq('id', reportId)
-      .single();
-
-    if (reportErr) throw reportErr;
-
-    // 2. Fetch timeline updates
-    const { data: updates, error: updatesErr } = await supabase
-      .from('report_updates')
-      .select('*')
-      .eq('report_id', reportId)
-      .order('created_at', { ascending: true });
-
-    // 3. Fetch AI analysis if available
-    const { data: aiAnalysis } = await supabase
-      .from('ai_analysis')
-      .select('*')
-      .eq('report_id', reportId)
       .maybeSingle();
 
-    return {
-      success: true,
-      data: {
-        ...report,
-        updates: updates || [],
-        ai_analysis: aiAnalysis || null,
-      },
-    };
-  } catch (error) {
-    console.error('Error fetching report details:', error);
-    return { success: false, error: error.message };
+    if (!reportErr && report) {
+      // Fetch timeline updates
+      const { data: updates } = await supabase
+        .from('report_updates')
+        .select('*')
+        .eq('report_id', reportId)
+        .order('created_at', { ascending: true });
+
+      // Fetch AI analysis if available
+      const { data: aiAnalysis } = await supabase
+        .from('ai_analysis')
+        .select('*')
+        .eq('report_id', reportId)
+        .maybeSingle();
+
+      return {
+        success: true,
+        data: {
+          ...report,
+          updates: updates || [],
+          ai_analysis: aiAnalysis || null,
+        },
+      };
+    }
+  } catch (supabaseError) {
+    console.warn('Direct Supabase fetch encountered issue, falling back to backend API:', supabaseError.message);
   }
+
+  // 2. Resilient fallback: Query FastAPI backend endpoint
+  try {
+    const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: {} }));
+    const token = sessionData?.session?.access_token;
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}`, { headers });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.report) {
+        return {
+          success: true,
+          data: {
+            ...result.report,
+            updates: result.timeline || result.updates || [],
+            ai_analysis: result.ai_analysis || null,
+          },
+        };
+      }
+    }
+  } catch (backendError) {
+    console.error('Backend report fetch fallback failed:', backendError.message);
+  }
+
+  return { success: false, error: 'Could not load report details. Please verify the Case ID.' };
 };
 
 /**

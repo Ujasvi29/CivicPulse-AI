@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { CivicImpactCard } from '../components/CivicImpactCard';
 import { VisualEvidenceCard } from '../components/VisualEvidenceCard';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { getReportById } from '../services/reports';
 import {
   ArrowLeft,
@@ -15,8 +16,6 @@ import {
   Loader2,
   Activity,
   Clock,
-  CircleDot,
-  Circle,
   FileText,
   Cpu,
   Users,
@@ -34,8 +33,10 @@ const STATUS_BADGE = {
 };
 
 function StatusBadge({ status }) {
-  const key = (status || 'submitted').toLowerCase();
-  const display = status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Submitted';
+  const key = typeof status === 'string' ? status.toLowerCase() : 'submitted';
+  const display = typeof status === 'string'
+    ? status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    : 'Submitted';
   return (
     <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border ${STATUS_BADGE[key] || STATUS_BADGE.submitted}`}>
       {display}
@@ -77,9 +78,9 @@ const LIFECYCLE_STEPS = [
   },
 ];
 
-// Maps report.status → which lifecycle step index is completed
 function getLifecycleIndex(status) {
-  switch ((status || '').toLowerCase()) {
+  const s = typeof status === 'string' ? status.toLowerCase() : '';
+  switch (s) {
     case 'submitted':   return 0;
     case 'ai_analyzed': return 1;
     case 'assigned':    return 2;
@@ -93,10 +94,11 @@ function getLifecycleIndex(status) {
 function CaseTimeline({ updates, reportStatus }) {
   const currentStepIdx = getLifecycleIndex(reportStatus);
 
-  // Build a lookup of actual db updates by their status string
   const updateByStatus = {};
-  (updates || []).forEach(u => {
-    updateByStatus[u.status] = u;
+  (Array.isArray(updates) ? updates : []).forEach(u => {
+    if (u && u.status) {
+      updateByStatus[u.status] = u;
+    }
   });
 
   return (
@@ -107,6 +109,20 @@ function CaseTimeline({ updates, reportStatus }) {
         const isLast = idx === LIFECYCLE_STEPS.length - 1;
         const dbUpdate = updateByStatus[step.key];
         const Icon = step.icon;
+
+        let formattedDate = '';
+        let formattedTime = '';
+        if (dbUpdate?.created_at) {
+          try {
+            const d = new Date(dbUpdate.created_at);
+            if (!isNaN(d.getTime())) {
+              formattedDate = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+              formattedTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
 
         return (
           <div key={step.key} className="flex items-stretch gap-4 relative">
@@ -170,21 +186,17 @@ function CaseTimeline({ updates, reportStatus }) {
                   </div>
 
                   {/* Timestamp */}
-                  {dbUpdate?.created_at && (
+                  {formattedDate && (
                     <div className="text-right shrink-0">
                       <div className="flex items-center gap-1 text-[10px] text-[var(--muted)] font-semibold whitespace-nowrap">
                         <Clock className="w-3 h-3" />
-                        <span>
-                          {new Date(dbUpdate.created_at).toLocaleDateString('en-US', {
-                            day: 'numeric', month: 'short', year: 'numeric',
-                          })}
-                        </span>
+                        <span>{formattedDate}</span>
                       </div>
-                      <div className="text-[10px] text-[var(--muted)] mt-0.5">
-                        {new Date(dbUpdate.created_at).toLocaleTimeString('en-US', {
-                          hour: '2-digit', minute: '2-digit',
-                        })}
-                      </div>
+                      {formattedTime && (
+                        <div className="text-[10px] text-[var(--muted)] mt-0.5">
+                          {formattedTime}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -197,25 +209,35 @@ function CaseTimeline({ updates, reportStatus }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export const ReportDetails = () => {
+// ─── Inner Report Details Component ───────────────────────────────────────────
+const ReportDetailsContent = () => {
   const { id } = useParams();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let mounted = true;
     const fetchDetail = async () => {
       setLoading(true);
-      const result = await getReportById(id);
-      if (result.success) {
-        setReport(result.data);
-      } else {
-        setError(result.error || 'Could not load report details.');
+      setError('');
+      try {
+        const result = await getReportById(id);
+        if (!mounted) return;
+        if (result.success && result.data) {
+          setReport(result.data);
+        } else {
+          setError(result.error || 'Could not load report details.');
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setError(err.message || 'An unexpected error occurred while loading this case.');
+      } finally {
+        if (mounted) setLoading(false);
       }
-      setLoading(false);
     };
     fetchDetail();
+    return () => { mounted = false; };
   }, [id]);
 
   if (loading) {
@@ -242,7 +264,7 @@ export const ReportDetails = () => {
           <p className="text-xs text-[var(--muted)]">{error || 'The requested case could not be located.'}</p>
           <Link
             to="/reports"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--primary)] hover:underline"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--primary)] hover:underline cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to My Reports
@@ -253,29 +275,41 @@ export const ReportDetails = () => {
   }
 
   const ai = report.ai_analysis;
-  const updates = report.updates || [];
+  const updates = Array.isArray(report.updates) ? report.updates : [];
 
   // Build metrics for CivicImpactCard from stored DB values
+  const impactScore = Number(report.impact_score) || 50;
   const metrics = {
-    impact_score: report.impact_score ?? 50,
-    impact_level: (report.impact_score ?? 50) >= 75 ? 'CRITICAL' : (report.impact_score ?? 50) >= 50 ? 'HIGH' : (report.impact_score ?? 50) >= 25 ? 'MODERATE' : 'LOW',
+    impact_score: impactScore,
+    impact_level: impactScore >= 75 ? 'CRITICAL' : impactScore >= 50 ? 'HIGH' : impactScore >= 25 ? 'MODERATE' : 'LOW',
     priority: report.priority || 'moderate',
-    severity_score: report.severity ?? 50,
-    severity_label: (report.severity ?? 50) >= 75 ? 'High' : (report.severity ?? 50) >= 50 ? 'Moderate' : 'Low',
-    urgency_score: report.urgency ?? 50,
-    urgency_label: (report.urgency ?? 50) >= 75 ? 'High' : (report.urgency ?? 50) >= 50 ? 'Medium' : 'Low',
-    public_impact_score: report.public_impact ?? 50,
-    public_impact_label: (report.public_impact ?? 50) >= 75 ? 'High' : (report.public_impact ?? 50) >= 50 ? 'Moderate' : 'Low',
+    severity_score: Number(report.severity) || 50,
+    severity_label: (Number(report.severity) || 50) >= 75 ? 'High' : (Number(report.severity) || 50) >= 50 ? 'Moderate' : 'Low',
+    urgency_score: Number(report.urgency) || 50,
+    urgency_label: (Number(report.urgency) || 50) >= 75 ? 'High' : (Number(report.urgency) || 50) >= 50 ? 'Medium' : 'Low',
+    public_impact_score: Number(report.public_impact) || 50,
+    public_impact_label: (Number(report.public_impact) || 50) >= 75 ? 'High' : (Number(report.public_impact) || 50) >= 50 ? 'Moderate' : 'Low',
     duration_score: 10,
     duration_label: 'Newly reported (1 day)',
-    confidence_score: report.evidence_confidence ?? 80,
-    confidence_label: `${report.evidence_confidence ?? 80}% Confidence`,
+    confidence_score: Number(report.evidence_confidence) || 80,
+    confidence_label: `${Number(report.evidence_confidence) || 80}% Confidence`,
     formula_explanation: 'CivicPulse AI combines issue severity (30%), urgency (30%), public impact (25%), duration (5%), and evidence confidence (10%) to deterministically estimate civic impact.',
   };
 
+  let formattedDate = 'Recent';
+  try {
+    if (report.created_at) {
+      formattedDate = new Date(report.created_at).toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+      });
+    }
+  } catch (e) {
+    // ignore
+  }
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col font-sans transition-colors duration-200">
-      <Header subtitle={`Case: ${report.case_number}`} />
+      <Header subtitle={`Case: ${report.case_number || id}`} />
 
       <main className="max-w-5xl mx-auto w-full p-4 sm:p-6 lg:p-8 flex-1 space-y-6">
 
@@ -283,7 +317,7 @@ export const ReportDetails = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <Link
             to="/reports"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--foreground)] transition"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--foreground)] transition cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to My Reports</span>
@@ -291,7 +325,7 @@ export const ReportDetails = () => {
 
           <div className="flex items-center gap-2.5">
             <span className="font-mono text-xs font-bold text-[var(--primary)] bg-[var(--primary)]/10 px-3 py-1 rounded-lg border border-[var(--primary)]/20">
-              {report.case_number}
+              {report.case_number || id?.slice(0, 8)}
             </span>
             <StatusBadge status={report.status} />
           </div>
@@ -311,35 +345,31 @@ export const ReportDetails = () => {
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--foreground)] tracking-tight">
-              {report.title}
+              {report.title || 'Civic Case Report'}
             </h1>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-[var(--muted)] border-y border-[var(--border)] py-3.5">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[var(--primary)] shrink-0" />
-              <span className="truncate">{report.address || 'Location recorded with report'}</span>
+              <span className="truncate">{report.address || (report.latitude ? `${Number(report.latitude).toFixed(4)}, ${Number(report.longitude).toFixed(4)}` : 'Location recorded with report')}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-teal-600 shrink-0" />
-              <span>
-                Submitted on {new Date(report.created_at).toLocaleDateString('en-US', {
-                  month: 'long', day: 'numeric', year: 'numeric',
-                })}
-              </span>
+              <span>Submitted on {formattedDate}</span>
             </div>
           </div>
 
           <div className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Problem Description</h3>
             <p className="text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-line">
-              {report.description}
+              {report.description || 'No detailed description provided.'}
             </p>
           </div>
         </div>
 
         {/* ── 2. Civic Impact Score ── */}
-        <CivicImpactCard metrics={metrics} />
+        <CivicImpactCard metrics={metrics} analysis={ai} />
 
         {/* ── 3. AI Civic Intelligence Assessment ── */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
@@ -454,5 +484,13 @@ export const ReportDetails = () => {
         CivicPulse AI • Public Service Platform
       </footer>
     </div>
+  );
+};
+
+export const ReportDetails = () => {
+  return (
+    <ErrorBoundary>
+      <ReportDetailsContent />
+    </ErrorBoundary>
   );
 };

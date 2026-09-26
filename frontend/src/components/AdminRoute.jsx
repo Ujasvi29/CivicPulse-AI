@@ -3,10 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import { AuthLoading } from './AuthLoading';
 
 export const AdminRoute = ({ children }) => {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, profile, isAdmin, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || (user && profile === null && !isAdmin)) {
     return <AuthLoading />;
   }
 

@@ -1,27 +1,36 @@
-import { Activity, ShieldAlert, AlertTriangle, CheckCircle2, Clock, Sparkles } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
-export const CivicImpactCard = ({ metrics }) => {
-  if (!metrics) return null;
+export const CivicImpactCard = ({ metrics, analysis }) => {
+  const m = metrics || (analysis ? {
+    severity_score: analysis.severity,
+    urgency_score: analysis.urgency,
+    public_impact_score: analysis.public_impact,
+    confidence_score: analysis.evidence_confidence,
+    impact_score: 50,
+    priority: 'moderate',
+  } : null);
 
-  const score = metrics.impact_score ?? 50;
-  const level = metrics.impact_level || (score >= 75 ? 'CRITICAL' : score >= 50 ? 'HIGH' : score >= 25 ? 'MODERATE' : 'LOW');
-  const priority = metrics.priority || level.toLowerCase();
+  if (!m) return null;
+
+  const score = Number(m.impact_score) || 50;
+  const level = m.impact_level || (score >= 75 ? 'CRITICAL' : score >= 50 ? 'HIGH' : score >= 25 ? 'MODERATE' : 'LOW');
+  const priority = String(m.priority || (typeof level === 'string' ? level.toLowerCase() : 'moderate'));
 
   // Factor Scores
-  const sevScore = metrics.severity_score ?? 50;
-  const sevLabel = metrics.severity_label || (sevScore >= 75 ? 'High' : sevScore >= 50 ? 'Moderate' : 'Low');
+  const sevScore = Number(m.severity_score) || 50;
+  const sevLabel = m.severity_label || (sevScore >= 75 ? 'High' : sevScore >= 50 ? 'Moderate' : 'Low');
 
-  const urgScore = metrics.urgency_score ?? 50;
-  const urgLabel = metrics.urgency_label || (urgScore >= 75 ? 'High' : urgScore >= 50 ? 'Medium' : 'Low');
+  const urgScore = Number(m.urgency_score) || 50;
+  const urgLabel = m.urgency_label || (urgScore >= 75 ? 'High' : urgScore >= 50 ? 'Medium' : 'Low');
 
-  const pubScore = metrics.public_impact_score ?? 50;
-  const pubLabel = metrics.public_impact_label || (pubScore >= 75 ? 'High' : pubScore >= 50 ? 'Moderate' : 'Low');
+  const pubScore = Number(m.public_impact_score) || 50;
+  const pubLabel = m.public_impact_label || (pubScore >= 75 ? 'High' : pubScore >= 50 ? 'Moderate' : 'Low');
 
-  const durScore = metrics.duration_score ?? 10;
-  const durLabel = metrics.duration_label || 'Newly reported';
+  const durScore = Number(m.duration_score) || 10;
+  const durLabel = m.duration_label || 'Newly reported';
 
-  const confScore = metrics.confidence_score ?? 80;
-  const confLabel = metrics.confidence_label || `${confScore}% Confidence`;
+  const confScore = Number(m.confidence_score) || 80;
+  const confLabel = m.confidence_label || `${confScore}% Confidence`;
 
   // Color scheme based on level
   const getColorScheme = () => {
@@ -157,7 +166,7 @@ export const CivicImpactCard = ({ metrics }) => {
             <div className="w-full h-2 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] overflow-hidden">
               <div
                 className="h-full bg-rose-500 rounded-full transition-all duration-500"
-                style={{ width: `${sevScore}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, sevScore))}%` }}
               />
             </div>
           </div>
@@ -171,7 +180,7 @@ export const CivicImpactCard = ({ metrics }) => {
             <div className="w-full h-2 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] overflow-hidden">
               <div
                 className="h-full bg-amber-500 rounded-full transition-all duration-500"
-                style={{ width: `${urgScore}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, urgScore))}%` }}
               />
             </div>
           </div>
@@ -185,7 +194,7 @@ export const CivicImpactCard = ({ metrics }) => {
             <div className="w-full h-2 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] overflow-hidden">
               <div
                 className="h-full bg-sky-500 rounded-full transition-all duration-500"
-                style={{ width: `${pubScore}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, pubScore))}%` }}
               />
             </div>
           </div>
@@ -199,7 +208,7 @@ export const CivicImpactCard = ({ metrics }) => {
             <div className="w-full h-2 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] overflow-hidden">
               <div
                 className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${confScore}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, confScore))}%` }}
               />
             </div>
           </div>
@@ -213,7 +222,7 @@ export const CivicImpactCard = ({ metrics }) => {
             <div className="w-full h-2 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] overflow-hidden">
               <div
                 className="h-full bg-teal-500 rounded-full transition-all duration-500"
-                style={{ width: `${durScore}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, durScore))}%` }}
               />
             </div>
           </div>
