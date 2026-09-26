@@ -57,7 +57,10 @@ export const sendCopilotMessage = async ({
   category_hint = null,
   token = null,
 }) => {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  if (!API_BASE_URL) {
+    throw new Error('Backend API URL is not configured. Set VITE_API_URL before building the frontend.');
+  }
 
   // Obtain active authenticated session token
   const activeToken = token || (await getSupabaseAccessToken());
